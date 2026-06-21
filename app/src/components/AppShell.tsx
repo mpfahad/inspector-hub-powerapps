@@ -25,14 +25,24 @@ const navGroups: NavGroup[] = [
     label: 'People',
     items: [
       { screen: 'scrInspectors', label: 'Inspectors', icon: '👷' },
+      { screen: 'scrQualifications', label: 'Qualifications', icon: '📜' },
       { screen: 'scrCompetency', label: 'Competency Matrix', icon: '🎓' },
       { screen: 'scrLeave', label: 'Leave', icon: '🏖️' },
+    ],
+  },
+  {
+    label: 'Insights',
+    items: [
+      { screen: 'scrDashboards', label: 'Executive Dashboards', icon: '📈' },
+      { screen: 'scrReports', label: 'Reports', icon: '📑' },
+      { screen: 'scrWorkflows', label: 'Workflows', icon: '⚡' },
+      { screen: 'scrAdmin', label: 'Administration', icon: '⚙️' },
     ],
   },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { navigate, currentScreen, vars } = useAppContext();
+  const { navigate, currentScreen, vars, signOut } = useAppContext();
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -88,8 +98,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </div>
         ))}
-        <div style={{ marginTop: 'auto', padding: theme.spacing.sm, fontSize: 10, color: theme.colors.textSecondary }}>
-          Source: github.com/mpfahad/inspector-hub
+        <div style={{ marginTop: 'auto', padding: theme.spacing.sm }}>
+          <button
+            type="button"
+            onClick={signOut}
+            style={{
+              width: '100%',
+              padding: '8px 14px',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              textAlign: 'left',
+              fontSize: 13,
+              color: theme.colors.textSecondary,
+            }}
+          >
+            Sign out
+          </button>
+          <div style={{ fontSize: 10, color: theme.colors.textSecondary, padding: '4px 14px' }}>
+            github.com/mpfahad/inspector-hub-powerapps
+          </div>
         </div>
       </nav>
       <main style={{ flex: 1, overflow: 'auto' }}>{children}</main>

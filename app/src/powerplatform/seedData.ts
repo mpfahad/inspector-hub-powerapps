@@ -5,6 +5,7 @@ import type {
   Client,
   Department,
   Inspector,
+  InspectorCert,
   Job,
   LeaveRequest,
   Qualification,
@@ -19,9 +20,9 @@ export const seedDepartments: Department[] = [
 ];
 
 export const seedClients: Client[] = [
-  { ID: 1, Title: 'Northshore Energy', Industry: 'Oil & Gas', Location: 'Houston' },
-  { ID: 2, Title: 'Helios Power', Industry: 'Power', Location: 'Phoenix' },
-  { ID: 3, Title: 'Atlas Construction', Industry: 'Construction', Location: 'Dallas' },
+  { ID: 1, Title: 'Northshore Energy', Industry: 'Oil & Gas', Location: 'Houston', Contact: 'L. Pereira', Email: 'lpereira@northshore.energy', ProjectCount: 3, JobCount: 12 },
+  { ID: 2, Title: 'Helios Power', Industry: 'Power', Location: 'Phoenix', Contact: 'M. Abbasi', Email: 'm.abbasi@helios.com', ProjectCount: 2, JobCount: 7 },
+  { ID: 3, Title: 'Atlas Construction', Industry: 'Construction', Location: 'Dallas', Contact: 'R. Whitford', Email: 'rw@atlascon.com', ProjectCount: 4, JobCount: 18 },
 ];
 
 export const seedInspectors: Inspector[] = [
@@ -78,3 +79,83 @@ export const seedKpis = {
   expiringCerts: 4,
   acceptanceRate: 92,
 };
+
+export const seedInspectorCerts: InspectorCert[] = [
+  { ID: 1, Title: 'API 510', InspectorName: 'Daniel Okafor', CertName: 'API 510 Pressure Vessel', IssuedOn: '2024-02-12', ExpiresOn: '2027-02-12', Status: 'Valid' },
+  { ID: 2, Title: 'PCN PAUT', InspectorName: 'Mei Lin', CertName: 'PCN Level II PAUT', IssuedOn: '2021-09-08', ExpiresOn: '2026-09-08', Status: 'Expiring Soon' },
+  { ID: 3, Title: 'ASNT RT', InspectorName: 'Olivia Brennan', CertName: 'ASNT Level II RT', IssuedOn: '2023-04-01', ExpiresOn: '2026-07-01', Status: 'Expiring Soon' },
+  { ID: 4, Title: 'ACI', InspectorName: 'Aisha Rahman', CertName: 'ACI Concrete Field Tech', IssuedOn: '2020-11-14', ExpiresOn: '2025-11-14', Status: 'Expired' },
+  { ID: 5, Title: 'CSWIP', InspectorName: 'Carlos Ibañez', CertName: 'CSWIP 3.1 Welding Inspector', IssuedOn: '2025-01-20', ExpiresOn: '2030-01-20', Status: 'Valid' },
+];
+
+export const utilizationSeries = [
+  { day: 'Mon', value: 74 },
+  { day: 'Tue', value: 81 },
+  { day: 'Wed', value: 79 },
+  { day: 'Thu', value: 85 },
+  { day: 'Fri', value: 88 },
+  { day: 'Sat', value: 62 },
+  { day: 'Sun', value: 48 },
+];
+
+export const deptLoad = [
+  { dept: 'Mechanical', load: 86 },
+  { dept: 'Electrical', load: 71 },
+  { dept: 'Civil', load: 92 },
+  { dept: 'HSE', load: 54 },
+  { dept: 'NDT', load: 78 },
+];
+
+export const leaderboard = [
+  { name: 'Olivia Brennan', dept: 'NDT', jobs: 31, hours: 412, score: 96 },
+  { name: 'Daniel Okafor', dept: 'Mechanical', jobs: 28, hours: 398, score: 94 },
+  { name: 'Carlos Ibañez', dept: 'Electrical', jobs: 26, hours: 384, score: 91 },
+  { name: 'Rafael Mendes', dept: 'Civil', jobs: 24, hours: 362, score: 88 },
+  { name: 'Mei Lin', dept: 'NDT', jobs: 22, hours: 348, score: 87 },
+];
+
+export const heatmap: Record<string, number[]> = {
+  Mechanical: [72, 80, 84, 88, 92, 60, 40],
+  Electrical: [64, 72, 78, 82, 86, 55, 30],
+  Civil: [85, 90, 94, 96, 98, 70, 45],
+  HSE: [40, 52, 58, 62, 66, 35, 20],
+  NDT: [70, 76, 82, 86, 90, 58, 38],
+};
+
+export const heatmapDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+export type WorkflowNotification = {
+  ID: number;
+  Title: string;
+  Trigger: string;
+  Audience: string;
+  Channels: string;
+  Severity: 'info' | 'success' | 'warn' | 'critical';
+  Timing: string;
+};
+
+export const seedWorkflows: WorkflowNotification[] = [
+  { ID: 1, Title: 'New Job Assignment', Trigger: 'On assignment created (Proposed)', Audience: 'Inspector, Coordinator', Channels: 'Email, In-App, Push', Severity: 'info', Timing: 'Immediate' },
+  { ID: 2, Title: 'Assignment Accepted', Trigger: 'On status → Confirmed', Audience: 'Coordinator, Manager', Channels: 'Email, In-App', Severity: 'success', Timing: 'Immediate' },
+  { ID: 3, Title: 'Assignment Rejected', Trigger: 'On status → Cancelled', Audience: 'Coordinator, Manager', Channels: 'Email, In-App, Push', Severity: 'warn', Timing: 'Immediate' },
+  { ID: 4, Title: 'Daily Log Reminder', Trigger: 'Scheduled 17:00 if no log', Audience: 'Inspector', Channels: 'Push, In-App, Email', Severity: 'info', Timing: '17:00 daily' },
+  { ID: 5, Title: 'Overdue Job', Trigger: 'EndDate < Today AND Status <> Completed', Audience: 'Manager, Coordinator', Channels: 'Email, In-App', Severity: 'critical', Timing: 'Daily 08:00' },
+  { ID: 6, Title: 'Cert Expiry Alert', Trigger: 'ExpiresOn in 90/30/7 days', Audience: 'Inspector, Manager', Channels: 'Email, In-App', Severity: 'warn', Timing: 'Scheduled' },
+  { ID: 7, Title: 'Leave Approved', Trigger: 'On LeaveRequests.Status → Approved', Audience: 'Inspector', Channels: 'Email, In-App', Severity: 'success', Timing: 'Immediate' },
+];
+
+export const seedApprovals = [
+  { process: 'Leave (≤3 days)', l1: 'Dept Manager', l2: '—', sla: '1 business day' },
+  { process: 'Leave (>3 days)', l1: 'Dept Manager', l2: 'Ops Manager', sla: '2 business days' },
+  { process: 'Job Closure', l1: 'Coordinator', l2: 'Dept Manager', sla: '1 business day' },
+  { process: 'Assignment Rejection', l1: 'Coordinator', l2: 'Dept Manager', sla: 'Same day' },
+];
+
+export const reportCatalog = [
+  { name: 'Inspector Utilization', desc: 'Hours, billable %, idle days per inspector and department.' },
+  { name: 'Department Workload', desc: 'Coverage ratio and 30-day forecast by department.' },
+  { name: 'Assignment Performance', desc: 'Acceptance, rejection reasons, and SLA lead time.' },
+  { name: 'Certification Compliance', desc: 'Per-inspector valid/expiring/expired counts.' },
+  { name: 'Leave Calendar', desc: 'Approved and pending leave by department.' },
+  { name: 'Client Billing Export', desc: 'Hours per job per client, ready for invoicing.' },
+];

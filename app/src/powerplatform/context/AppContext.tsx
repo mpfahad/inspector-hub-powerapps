@@ -3,19 +3,19 @@ import type { AppVariables, ScreenName, UserRole } from '../types';
 
 interface AppContextValue {
   vars: AppVariables;
-  /** PowerFx: Set(varSelectedJobId, galJobs.Selected.ID) */
   setVar: <K extends keyof AppVariables>(key: K, value: AppVariables[K]) => void;
-  /** PowerFx: UpdateContext({ varFilterJobStatus: "Scheduled", varGalleryPage: 0 }) */
   updateContext: (patch: Partial<AppVariables>) => void;
-  /** PowerFx: Navigate(scrJobDetail, ScreenTransition.Fade) */
   navigate: (screen: ScreenName) => void;
   currentScreen: ScreenName;
-  /** PowerFx: Back() */
   back: () => void;
+  /** PowerFx: Set(varIsAuthenticated, true); Navigate(scrHome) — Canvas uses Azure AD */
+  signIn: (email: string, role?: UserRole) => void;
+  signOut: () => void;
 }
 
 const defaultVars: AppVariables = {
-  varCurrentUserEmail: 'manager@company.com',
+  varIsAuthenticated: false,
+  varCurrentUserEmail: '',
   varUserRole: 'Manager',
   varSelectedJobId: null,
   varSelectedInspectorId: null,
@@ -55,9 +55,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCurrentScreen(next[next.length - 1]);
   }, [screenStack]);
 
+  const signIn = useCallback((email: string, role: UserRole = 'Manager') => {
+    setVars((prev) => ({
+      ...prev,
+      varIsAuthenticated: true,
+      varCurrentUserEmail: email,
+      varUserRole: role,
+    }));
+    setCurrentScreen('scrHome');
+    setScreenStack(['scrHome']);
+  }, []);
+
+  const signOut = useCallback(() => {
+    setVars({ ...defaultVars });
+    setCurrentScreen('scrLogin');
+    setScreenStack(['scrLogin']);
+  }, []);
+
   const value = useMemo(
-    () => ({ vars, setVar, updateContext, navigate, currentScreen, back }),
-    [vars, setVar, updateContext, navigate, currentScreen, back]
+    () => ({ vars, setVar, updateContext, navigate, currentScreen, back, signIn, signOut }),
+    [vars, setVar, updateContext, navigate, currentScreen, back, signIn, signOut]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -8,6 +8,7 @@ import {
   seedAssignments,
   seedClients,
   seedDepartments,
+  seedInspectorCerts,
   seedInspectors,
   seedJobs,
   seedLeaveRequests,
@@ -19,6 +20,7 @@ import type {
   Client,
   Department,
   Inspector,
+  InspectorCert,
   Job,
   LeaveRequest,
   ListName,
@@ -35,6 +37,7 @@ type ListMap = {
   ActivityLogs: ActivityLog;
   LeaveRequests: LeaveRequest;
   Qualifications: Qualification;
+  InspectorCerts: InspectorCert;
 };
 
 const store: { [K in ListName]: ListMap[K][] } = {
@@ -46,6 +49,7 @@ const store: { [K in ListName]: ListMap[K][] } = {
   ActivityLogs: [...seedActivityLogs],
   LeaveRequests: [...seedLeaveRequests],
   Qualifications: [...seedQualifications],
+  InspectorCerts: [...seedInspectorCerts],
 };
 
 /** PowerFx: Jobs — direct list reference in formulas */

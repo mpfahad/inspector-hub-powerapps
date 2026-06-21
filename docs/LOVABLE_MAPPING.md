@@ -14,14 +14,14 @@
 | `/assignments` | `scrAssignments` | `ScrAssignments.tsx` | Done (skill engine) |
 | `/activity-logs` | `scrActivityLog` | `ScrActivityLog.tsx` | Done |
 | `/inspectors` | `scrInspectors` + `scrInspectorDetail` | `ScrInspectors.tsx`, `ScrInspectorDetail.tsx` | Done |
-| `/qualifications` | — | Merge into `scrCompetency` | Partial |
+| `/qualifications` | `scrQualifications` | `ScrQualifications.tsx` | Done |
 | `/competency` | `scrCompetency` | `ScrCompetency.tsx` | Done |
 | `/leave` | `scrLeave` | `ScrLeave.tsx` | Done |
-| `/dashboards` | `scrDashboards` | — | **Power BI** recommended |
-| `/reports` | `scrReports` | — | **Power BI** recommended |
-| `/workflows` | — | Power Automate only | Not in Canvas |
-| `/admin` | `scrAdmin` | — | Phase 2 |
-| `/login` | Azure AD / SharePoint auth | — | Native to M365 |
+| `/dashboards` | `scrDashboards` | `ScrDashboards.tsx` | Done (simplified; Power BI for production) |
+| `/reports` | `scrReports` | `ScrReports.tsx` | Done |
+| `/workflows` | `scrWorkflows` | `ScrWorkflows.tsx` | Done (Power Automate reference) |
+| `/admin` | `scrAdmin` | `ScrAdmin.tsx` | Done (Admin role gate) |
+| `/login` | `scrLogin` | `ScrLogin.tsx` | Done (demo; Canvas uses Azure AD) |
 
 ## Logic mapping
 

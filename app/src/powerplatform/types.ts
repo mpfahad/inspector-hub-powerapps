@@ -14,6 +14,18 @@ export interface Department extends SPRecord {
 export interface Client extends SPRecord {
   Industry: string;
   Location: string;
+  Contact?: string;
+  Email?: string;
+  ProjectCount?: number;
+  JobCount?: number;
+}
+
+export interface InspectorCert extends SPRecord {
+  InspectorName: string;
+  CertName: string;
+  IssuedOn: string;
+  ExpiresOn: string;
+  Status: 'Valid' | 'Expiring Soon' | 'Expired';
 }
 
 export interface Inspector extends SPRecord {
@@ -80,9 +92,11 @@ export type ListName =
   | 'Assignments'
   | 'ActivityLogs'
   | 'LeaveRequests'
-  | 'Qualifications';
+  | 'Qualifications'
+  | 'InspectorCerts';
 
 export type ScreenName =
+  | 'scrLogin'
   | 'scrHome'
   | 'scrDepartments'
   | 'scrJobs'
@@ -91,13 +105,19 @@ export type ScreenName =
   | 'scrInspectors'
   | 'scrInspectorDetail'
   | 'scrPlanner'
+  | 'scrQualifications'
   | 'scrCompetency'
   | 'scrActivityLog'
-  | 'scrLeave';
+  | 'scrLeave'
+  | 'scrDashboards'
+  | 'scrReports'
+  | 'scrWorkflows'
+  | 'scrAdmin';
 
 export type UserRole = 'Admin' | 'Manager' | 'Inspector';
 
 export interface AppVariables {
+  varIsAuthenticated: boolean;
   varCurrentUserEmail: string;
   varUserRole: UserRole;
   varSelectedJobId: number | null;

@@ -226,7 +226,9 @@ export function StatusBadge({ status }: { status: string }) {
     Proposed: theme.colors.warning,
     Confirmed: theme.colors.accent,
     Critical: theme.colors.danger,
-    High: '#d83b01',
+    Valid: theme.colors.success,
+    'Expiring Soon': theme.colors.warning,
+    Expired: theme.colors.danger,
   };
   return (
     <span
@@ -242,6 +244,24 @@ export function StatusBadge({ status }: { status: string }) {
     >
       {status}
     </span>
+  );
+}
+
+export function ProgressBar({ value, max = 100 }: { value: number; max?: number }) {
+  const pct = Math.min(100, Math.round((value / max) * 100));
+  return (
+    <div style={{ height: 8, background: theme.colors.border, borderRadius: 4, overflow: 'hidden' }}>
+      <div style={{ height: '100%', width: `${pct}%`, background: theme.colors.accent, borderRadius: 4 }} />
+    </div>
+  );
+}
+
+export function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, cursor: 'pointer', fontSize: 14 }}>
+      <span>{label}</span>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    </label>
   );
 }
 

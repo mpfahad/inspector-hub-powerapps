@@ -1,0 +1,34 @@
+erDiagram
+  DEPARTMENT ||--o{ INSPECTOR : employs
+  DEPARTMENT ||--o{ JOB : owns
+  CLIENT ||--o{ JOB : commissions
+  INSPECTOR ||--o{ ASSIGNMENT : receives
+  JOB ||--o{ ASSIGNMENT : has
+  INSPECTOR ||--o{ ACTIVITY_LOG : submits
+  JOB ||--o{ ACTIVITY_LOG : recorded_against
+  INSPECTOR ||--o{ LEAVE_REQUEST : files
+  INSPECTOR ||--o{ TRAINING_SESSION : attends
+  INSPECTOR ||--o{ INSPECTOR_CERT : holds
+  CERTIFICATION ||--o{ INSPECTOR_CERT : referenced_by
+  INSPECTOR ||--o{ INSPECTOR_QUAL : holds
+  QUALIFICATION ||--o{ INSPECTOR_QUAL : referenced_by
+  USER ||--o{ USER_ROLE : has
+  USER ||--o{ NOTIFICATION : receives
+  USER ||--o{ APPROVAL : decides
+
+  DEPARTMENT { uuid id PK; text name; text code; uuid manager_id FK }
+  INSPECTOR { uuid id PK; text employee_no; text name; uuid department_id FK; text base_location; text status; date hire_date }
+  CLIENT { uuid id PK; text name; text industry; text location }
+  JOB { uuid id PK; text ref; uuid client_id FK; uuid department_id FK; text scope; date start_date; date end_date; text status; text priority }
+  ASSIGNMENT { uuid id PK; uuid job_id FK; uuid inspector_id FK; numeric allocated_hours; text role; text status; uuid created_by FK; timestamptz decided_at }
+  ACTIVITY_LOG { uuid id PK; uuid inspector_id FK; uuid job_id FK; date log_date; numeric hours; numeric productive_hours; text narrative; numeric quality_score }
+  LEAVE_REQUEST { uuid id PK; uuid inspector_id FK; text type; date start_date; date end_date; text status; uuid approver_id FK }
+  TRAINING_SESSION { uuid id PK; uuid inspector_id FK; text course; date start_date; date end_date; text provider }
+  CERTIFICATION { uuid id PK; text code; text name; text issuer; int validity_months }
+  INSPECTOR_CERT { uuid inspector_id FK; uuid certification_id FK; date issued_on; date expires_on; text doc_url }
+  QUALIFICATION { uuid id PK; text name; text category; text level }
+  INSPECTOR_QUAL { uuid inspector_id FK; uuid qualification_id FK; date granted_on }
+  USER { uuid id PK; text email; text full_name }
+  USER_ROLE { uuid user_id FK; text role }
+  NOTIFICATION { uuid id PK; uuid user_id FK; text template_id; jsonb payload; text channel; text status; timestamptz sent_at }
+  APPROVAL { uuid id PK; text entity_type; uuid entity_id; int level; uuid approver_id FK; text decision; timestamptz decided_at }

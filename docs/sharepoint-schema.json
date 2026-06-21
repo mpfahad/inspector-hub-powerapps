@@ -1,0 +1,90 @@
+{
+  "sharePointSite": "https://tenant.sharepoint.com/sites/InspectorHub",
+  "lists": [
+    {
+      "name": "Departments",
+      "internalName": "Departments",
+      "columns": [
+        { "displayName": "Title", "internalName": "Title", "type": "Text", "required": true },
+        { "displayName": "Code", "internalName": "Code", "type": "Text", "indexed": true },
+        { "displayName": "Manager", "internalName": "Manager", "type": "Person" }
+      ]
+    },
+    {
+      "name": "Clients",
+      "internalName": "Clients",
+      "columns": [
+        { "displayName": "Title", "internalName": "Title", "type": "Text", "required": true },
+        { "displayName": "Industry", "internalName": "Industry", "type": "Choice", "choices": ["Oil & Gas", "Marine", "Construction", "Power", "Other"] },
+        { "displayName": "Location", "internalName": "Location", "type": "Text" }
+      ]
+    },
+    {
+      "name": "Inspectors",
+      "internalName": "Inspectors",
+      "columns": [
+        { "displayName": "Title", "internalName": "Title", "type": "Text", "required": true },
+        { "displayName": "EmployeeNo", "internalName": "EmployeeNo", "type": "Text", "indexed": true },
+        { "displayName": "Department", "internalName": "DepartmentId", "type": "Lookup", "lookupList": "Departments" },
+        { "displayName": "BaseLocation", "internalName": "BaseLocation", "type": "Text" },
+        { "displayName": "Status", "internalName": "Status", "type": "Choice", "choices": ["Active", "On Leave", "Training", "Inactive"], "indexed": true },
+        { "displayName": "HireDate", "internalName": "HireDate", "type": "Date" }
+      ]
+    },
+    {
+      "name": "Jobs",
+      "internalName": "Jobs",
+      "columns": [
+        { "displayName": "Title", "internalName": "Title", "type": "Text", "required": true, "comment": "Job reference e.g. JOB-2026-0142" },
+        { "displayName": "Client", "internalName": "ClientId", "type": "Lookup", "lookupList": "Clients", "indexed": true },
+        { "displayName": "Department", "internalName": "DepartmentId", "type": "Lookup", "lookupList": "Departments", "indexed": true },
+        { "displayName": "Scope", "internalName": "Scope", "type": "Note" },
+        { "displayName": "StartDate", "internalName": "StartDate", "type": "Date", "indexed": true },
+        { "displayName": "EndDate", "internalName": "EndDate", "type": "Date" },
+        { "displayName": "Status", "internalName": "Status", "type": "Choice", "choices": ["Draft", "Scheduled", "In Progress", "Completed", "Cancelled"], "indexed": true },
+        { "displayName": "Priority", "internalName": "Priority", "type": "Choice", "choices": ["Low", "Medium", "High", "Critical"] }
+      ]
+    },
+    {
+      "name": "Assignments",
+      "internalName": "Assignments",
+      "columns": [
+        { "displayName": "Title", "internalName": "Title", "type": "Text", "comment": "Auto: Job ref + Inspector" },
+        { "displayName": "Job", "internalName": "JobId", "type": "Lookup", "lookupList": "Jobs", "indexed": true },
+        { "displayName": "Inspector", "internalName": "InspectorId", "type": "Lookup", "lookupList": "Inspectors", "indexed": true },
+        { "displayName": "AllocatedHours", "internalName": "AllocatedHours", "type": "Number" },
+        { "displayName": "Role", "internalName": "Role", "type": "Choice", "choices": ["Lead", "Support", "Trainee", "Reviewer"] },
+        { "displayName": "Status", "internalName": "Status", "type": "Choice", "choices": ["Proposed", "Confirmed", "In Progress", "Complete", "Cancelled"], "indexed": true },
+        { "displayName": "CreatedByEmail", "internalName": "CreatedByEmail", "type": "Text" },
+        { "displayName": "DecidedAt", "internalName": "DecidedAt", "type": "DateTime" }
+      ]
+    },
+    {
+      "name": "ActivityLogs",
+      "internalName": "ActivityLogs",
+      "columns": [
+        { "displayName": "Title", "internalName": "Title", "type": "Text" },
+        { "displayName": "Inspector", "internalName": "InspectorId", "type": "Lookup", "lookupList": "Inspectors", "indexed": true },
+        { "displayName": "Job", "internalName": "JobId", "type": "Lookup", "lookupList": "Jobs", "indexed": true },
+        { "displayName": "LogDate", "internalName": "LogDate", "type": "Date", "indexed": true },
+        { "displayName": "Hours", "internalName": "Hours", "type": "Number" },
+        { "displayName": "ProductiveHours", "internalName": "ProductiveHours", "type": "Number" },
+        { "displayName": "Narrative", "internalName": "Narrative", "type": "Note" },
+        { "displayName": "QualityScore", "internalName": "QualityScore", "type": "Number" }
+      ]
+    },
+    {
+      "name": "LeaveRequests",
+      "internalName": "LeaveRequests",
+      "columns": [
+        { "displayName": "Title", "internalName": "Title", "type": "Text" },
+        { "displayName": "Inspector", "internalName": "InspectorId", "type": "Lookup", "lookupList": "Inspectors", "indexed": true },
+        { "displayName": "Type", "internalName": "Type", "type": "Choice", "choices": ["Annual", "Sick", "Training", "Other"] },
+        { "displayName": "StartDate", "internalName": "StartDate", "type": "Date", "indexed": true },
+        { "displayName": "EndDate", "internalName": "EndDate", "type": "Date" },
+        { "displayName": "Status", "internalName": "Status", "type": "Choice", "choices": ["Pending", "Approved", "Rejected", "Cancelled"], "indexed": true },
+        { "displayName": "ApproverEmail", "internalName": "ApproverEmail", "type": "Text" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+lovable-source/
+node_modules/
+dist/
+.DS_Store
+*.local
+.env
+.env.*

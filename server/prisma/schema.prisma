@@ -1,0 +1,392 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  Admin
+  Manager
+  Coordinator
+  Inspector
+}
+
+/// Local email+password vs future Microsoft Entra ID (Azure AD).
+enum IdentityProvider {
+  local
+  entra
+}
+
+enum InspectorStatus {
+  Active
+  OnLeave
+  Training
+  Inactive
+}
+
+enum JobStatus {
+  Draft
+  Proposed
+  PendingAcceptance
+  Active
+  Completed
+  Closed
+  Cancelled
+}
+
+enum AssignmentStatus {
+  Proposed
+  PendingAcceptance
+  Accepted
+  Rejected
+  Active
+  Complete
+  Cancelled
+}
+
+enum LeaveStatus {
+  Pending
+  Approved
+  Rejected
+  Cancelled
+}
+
+enum TimesheetStatus {
+  Submitted
+  Reviewed
+  Approved
+  Rejected
+}
+
+enum CertStatus {
+  Valid
+  ExpiringSoon
+  Expired
+}
+
+model User {
+  id               Int              @id @default(autoincrement())
+  email            String           @unique
+  /// Null for Entra-only accounts (no local password).
+  passwordHash     String?
+  fullName         String
+  role             UserRole
+  /// Entra object id (oid). Unique when set; unused for local users.
+  externalSubject  String?          @unique
+  identityProvider IdentityProvider @default(local)
+  createdAt        DateTime         @default(now())
+  auditEvents      AuditEvent[]
+  inspector        Inspector?
+}
+
+model Department {
+  id             Int        @id @default(autoincrement())
+  name           String
+  code           String     @unique
+  managerEmail   String?
+  inspectors     Inspector[]
+  jobs           Job[]
+}
+
+model Client {
+  id        Int    @id @default(autoincrement())
+  name      String
+  industry  String?
+  location  String?
+  latitude  Float?
+  longitude Float?
+  contact   String?
+  email     String?
+  jobs      Job[]
+}
+
+model Inspector {
+  id             Int             @id @default(autoincrement())
+  employeeNo     String          @unique
+  name           String
+  /// Display / notices only. Prefer userId for authz.
+  email          String?
+  /// Linked login account. Nullable until HR supplies an email and a User is created.
+  userId         Int?            @unique
+  user           User?           @relation(fields: [userId], references: [id])
+  departmentId   Int
+  department     Department      @relation(fields: [departmentId], references: [id])
+  baseLocation   String?
+  status         InspectorStatus @default(Active)
+  hireDate       DateTime?
+  yearsExperience Int            @default(0)
+  weeklyCapacityHrs Float         @default(40)
+  dailyCostUsd      Float?
+  dailyBillableUsd  Float?
+  /// Profile flag: inspector is cleared for jobs that require a QE-approved inspector.
+  /// Set from qualification matrix "QP Approved Inspector" (not QP Trainer alone).
+  qeApproved        Boolean          @default(false)
+  /// Academic level from matrix (Diploma / Graduate). Optional until HR confirms.
+  highestQualification String?
+  assignments    Assignment[]
+  activityLogs   ActivityLog[]
+  leaveRequests  LeaveRequest[]
+  inspectorCerts InspectorCert[]
+  proposals      AssignmentProposal[]
+  timesheets     Timesheet[]
+  costHistory    InspectorCostHistory[]
+}
+
+model Certification {
+  id             Int             @id @default(autoincrement())
+  code           String          @unique
+  name           String
+  issuer         String?
+  validityMonths Int?
+  inspectorCerts InspectorCert[]
+  jobRequirements JobCertRequirement[]
+  jobTypeRequirements JobTypeCertRequirement[]
+}
+
+model JobType {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  /// Default commercial price (USD) copied onto a job at assign unless overridden.
+  defaultPriceUsd Float?
+  certRequirements JobTypeCertRequirement[]
+  jobs        Job[]
+  priceChart  PriceChart?
+}
+
+/// Singleton-style price chart: one global default (jobTypeId null) plus optional per-type rows.
+model PriceChart {
+  id             Int      @id @default(autoincrement())
+  jobTypeId      Int?     @unique
+  jobType        JobType? @relation(fields: [jobTypeId], references: [id], onDelete: Cascade)
+  priceUsd       Float
+  updatedByEmail String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model JobTypeCertRequirement {
+  id              Int           @id @default(autoincrement())
+  jobTypeId       Int
+  jobType         JobType       @relation(fields: [jobTypeId], references: [id], onDelete: Cascade)
+  certificationId Int
+  certification   Certification @relation(fields: [certificationId], references: [id])
+  mandatory       Boolean       @default(true)
+}
+
+model InspectorCert {
+  id              Int           @id @default(autoincrement())
+  inspectorId     Int
+  inspector       Inspector     @relation(fields: [inspectorId], references: [id])
+  certificationId Int
+  certification   Certification @relation(fields: [certificationId], references: [id])
+  issuedOn        DateTime
+  expiresOn       DateTime
+  status          CertStatus    @default(Valid)
+}
+
+model InspectorCostHistory {
+  id               Int       @id @default(autoincrement())
+  inspectorId      Int
+  inspector        Inspector @relation(fields: [inspectorId], references: [id], onDelete: Cascade)
+  dailyCostUsd     Float?
+  dailyBillableUsd Float?
+  changedByEmail   String?
+  createdAt        DateTime  @default(now())
+}
+
+model Qualification {
+  id       Int    @id @default(autoincrement())
+  name     String
+  category String?
+  body     String?
+  level    String?
+}
+
+model Job {
+  id                    Int      @id @default(autoincrement())
+  ref                   String   @unique
+  title                 String
+  clientId              Int
+  client                Client   @relation(fields: [clientId], references: [id])
+  departmentId          Int
+  department            Department @relation(fields: [departmentId], references: [id])
+  jobTypeId             Int?
+  jobType               JobType? @relation(fields: [jobTypeId], references: [id])
+  scope                 String?
+  location              String?
+  startDate             DateTime
+  endDate               DateTime
+  status                JobStatus @default(Draft)
+  priority              String   @default("Normal")
+  estimatedHours        Float    @default(40)
+  requiredInspectorCount Int     @default(1)
+  /// When true, only inspectors with Inspector.qeApproved=true may be assigned (job goes Active immediately).
+  requiresQeApproval    Boolean  @default(false)
+  latitude              Float?
+  longitude             Float?
+  /// Commercial job price (USD). Copied from the price chart at assign; editable until close.
+  agreedPriceUsd        Float?
+  closingComments       String?
+  completedAt           DateTime?
+  completedByEmail      String?
+  managerApprovalComment String?
+  approvedAt            DateTime?
+  approvedByEmail       String?
+  createdByEmail        String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  certRequirements      JobCertRequirement[]
+  proposals             AssignmentProposal[]
+  assignments           Assignment[]
+  activityLogs          ActivityLog[]
+  timesheets            Timesheet[]
+  statusHistory         JobStatusHistory[]
+}
+
+model JobCertRequirement {
+  id              Int           @id @default(autoincrement())
+  jobId           Int
+  job             Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  certificationId Int
+  certification   Certification @relation(fields: [certificationId], references: [id])
+  mandatory       Boolean       @default(true)
+}
+
+model AssignmentProposal {
+  id           Int       @id @default(autoincrement())
+  jobId        Int
+  job          Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  inspectorId  Int
+  inspector    Inspector @relation(fields: [inspectorId], references: [id])
+  score        Int
+  rank         Int
+  blocked      Boolean   @default(false)
+  blockReasons String?
+  warnings     String?
+  createdAt    DateTime  @default(now())
+}
+
+model Assignment {
+  id              Int              @id @default(autoincrement())
+  jobId           Int
+  job             Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  inspectorId     Int
+  inspector       Inspector        @relation(fields: [inspectorId], references: [id])
+  role            String           @default("Lead")
+  allocatedHours  Float            @default(40)
+  status          AssignmentStatus @default(Proposed)
+  rejectReason    String?
+  createdByEmail  String?
+  decidedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  /// Snapshot of inspector daily CTC at assign (QAR amounts; field name kept *Usd).
+  dailyCostUsd      Float?
+  /// Snapshot of inspector daily billable at assign.
+  dailyBillableUsd  Float?
+  responses       AssignmentResponse[]
+}
+
+model AssignmentResponse {
+  id           Int        @id @default(autoincrement())
+  assignmentId Int
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  accepted     Boolean
+  reason       String?
+  respondedAt  DateTime   @default(now())
+  userEmail    String?
+}
+
+model ActivityLog {
+  id              Int       @id @default(autoincrement())
+  jobId           Int
+  job             Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  inspectorId     Int
+  inspector       Inspector @relation(fields: [inspectorId], references: [id])
+  logDate         DateTime
+  hours           Float
+  productiveHours Float
+  narrative       String?
+  qualityScore    Int?
+  createdAt       DateTime  @default(now())
+}
+
+model LeaveRequest {
+  id             Int         @id @default(autoincrement())
+  inspectorId    Int
+  inspector      Inspector   @relation(fields: [inspectorId], references: [id])
+  type           String
+  startDate      DateTime
+  endDate        DateTime
+  status         LeaveStatus @default(Pending)
+  reason         String?
+  createdByEmail String?
+  updatedByEmail String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @default(now()) @updatedAt
+}
+
+model Timesheet {
+  id                  Int             @id @default(autoincrement())
+  ref                 String          @unique
+  jobId               Int?
+  job                 Job?            @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  inspectorId         Int
+  inspector           Inspector       @relation(fields: [inspectorId], references: [id])
+  periodStart         DateTime
+  periodEnd           DateTime
+  status              TimesheetStatus @default(Submitted)
+  generatedByEmail    String?
+  inspectorComments   String?
+  totalHours          Float           @default(0)
+  totalProductiveHours Float          @default(0)
+  createdAt           DateTime        @default(now())
+  lines               TimesheetLine[]
+}
+
+model TimesheetLine {
+  id              Int       @id @default(autoincrement())
+  timesheetId     Int
+  timesheet       Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+  logDate         DateTime
+  hours           Float
+  productiveHours Float
+  description     String?
+}
+
+model JobStatusHistory {
+  id        Int       @id @default(autoincrement())
+  jobId     Int
+  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  fromStatus JobStatus?
+  toStatus  JobStatus
+  note      String?
+  userEmail String?
+  createdAt DateTime  @default(now())
+}
+
+model AuditEvent {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   Int?
+  payload    String?
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userEmail String
+  title     String
+  body      String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}

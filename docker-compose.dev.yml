@@ -1,0 +1,42 @@
+# IRPPMS isolated stack — ports 5180/4100 (contract app uses 5173/4000)
+name: irppms
+
+services:
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.dev
+    container_name: irppms-api
+    ports:
+      - "4100:4100"
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+      - irppms-data:/data
+    environment:
+      DATABASE_URL: file:/data/irppms.db
+      JWT_SECRET: local-dev-secret-irppms-use-32-chars-minimum
+      PORT: 4100
+      CORS_ORIGIN: http://localhost:5180
+    command: sh -c "npx prisma db push && npx tsx prisma/seed.ts && npm run dev"
+
+  web:
+    build:
+      context: ./app
+      dockerfile: Dockerfile.dev
+    container_name: irppms-web
+    ports:
+      - "5180:5180"
+    volumes:
+      - ./app:/app
+      - /app/node_modules
+    environment:
+      IRPPMS_WEB_PORT: 5180
+      IRPPMS_API_PORT: 4100
+      IRPPMS_API_URL: http://api:4100
+    depends_on:
+      - api
+
+volumes:
+  irppms-data:
+    name: irppms-data

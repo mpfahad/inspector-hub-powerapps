@@ -1,5 +1,6 @@
 {
   "name": "irppms",
+  "version": "0.9.0",
   "private": true,
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"npm run dev --prefix server\" \"npx wait-on http://localhost:4100/api/health -t 60000 && npm run dev --prefix app\"",

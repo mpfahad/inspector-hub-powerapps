@@ -44,7 +44,15 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 | CM-015 | 2026-11-04 | Soften QE gate: do not hide non–QE staff or show “Blocked” list; grey non-QE in assign list; warn on select; allow override; note on job card when non-QE assigned on QE-preferred job; move current assignment onto job summary; reassign panel lower on job detail. | Stakeholder | Implemented | 2026-11-04: Assign API allows override (`qeOverride` audit). Assign UI lists all inspectors (non-QE greyed). Job card shows assignment + amber note. Copy: “Prefers QE” (supersedes hard-block wording of CM-010 for assign UX; profile flag unchanged). |
 | CM-016 | 2026-11-04 | Activity logs: multi-day batch entry (range + per-day hours) while keeping single-day mode; remove coordinator helper blurb on mark-complete card. | Stakeholder | Implemented | 2026-11-04: Activity log Single/Multi-day modes; `POST /api/activity-logs/batch` skips already-logged dates; job dates prefill range. |
 | CM-017 | 2026-11-04 | Timesheet generate: department + job type filters and inspector search. Job Types page: job types left / price chart right; inline edit on same card; add qualifications to catalog. Clients page search already present from prior work; create/update clients + geocode remain. | Stakeholder | Implemented | 2026-11-04: TimesheetGenerator filters. JobTypesPage two-column layout + inline edit + `POST /api/certifications`. |
-| CM-018 | 2026-11-04 | **Department-centric IA:** left nav = Notifications, Dashboard, then Departments with each department expanding to department-scoped Jobs / Inspectors / Planner / etc.; Clients global (with search). Reduce cross-dept clutter and constant dept filtering. | Stakeholder | Under review | — |
+| CM-018 | 2026-11-04 | **Department-centric IA:** left nav = Notifications, Dashboard, then Departments with each department expanding to department-scoped Jobs / Inspectors / Job types / Planner / etc.; Clients global (with search). **Job types live under department** (not global). **Cross-dept assign allowed:** e.g. Lifting job ↔ Rigs inspector; assign UI offers other-dept inspectors. **Attribution:** job commercials/progress stay on **job’s department**; inspector utilization/productivity stay on **inspector’s home department**, with amber “loaned / borrowed” markers both ways. | Stakeholder | Under review | — |
+
+---
+
+### Stable release marker
+
+| Marker | Meaning |
+|--------|---------|
+| **`v0.9.0-uat-stable`** | Git annotated tag + [`docs/VERSIONS.md`](./VERSIONS.md). Freeze point after **CM-014–CM-017**. Use this tag to restore if **CM-018** (department-centric IA) causes issues. |
 
 ---
 

@@ -137,9 +137,9 @@ export function JobEditPanel({ job, clients, departments, onSaved }: Props) {
               onChange={(e) => setForm({ ...form, requiresQeApproval: e.target.checked })}
             />
             <span>
-              <span className="text-sm font-medium text-navy">Requires QE-approved inspector</span>
+              <span className="text-sm font-medium text-navy">Prefers QE-approved inspector</span>
               <p className="text-xs text-slate-500 mt-0.5">
-                If on, only inspectors marked QE-approved on their profile can be assigned. Assign still makes the job Active immediately.
+                If on, QE-approved staff are preferred. Non–QE staff stay selectable with a warning; assigners may override. Assign still makes the job Active immediately.
               </p>
             </span>
           </label>

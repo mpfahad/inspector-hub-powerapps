@@ -11,6 +11,7 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:import-roster": "tsx prisma/import-roster.ts",
+    "db:import-rigs": "tsx prisma/import-rigs-roster.ts",
     "db:seed-sample-jobs": "tsx prisma/seed-sample-jobs.ts",
     "db:reset": "prisma migrate reset --force"
   },

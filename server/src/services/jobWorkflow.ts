@@ -162,11 +162,8 @@ export async function assignInspector(
 
   const inspector = await prisma.inspector.findUnique({ where: { id: inspectorId } });
   if (!inspector) throw new Error('Inspector not found');
-  if (job.requiresQeApproval && !inspector.qeApproved) {
-    throw new Error(
-      `${inspector.name} is not QE-approved. This job requires a QE-approved inspector — mark them on the inspector profile first.`
-    );
-  }
+  /** QE flag is advisory: staff may assign a non–QE-approved inspector after UI warning. */
+  const qeOverride = Boolean(job.requiresQeApproval && !inspector.qeApproved);
 
   const assignmentStatus = 'Active' as const;
 
@@ -198,8 +195,30 @@ export async function assignInspector(
       await prisma.job.update({ where: { id: jobId }, data: { agreedPriceUsd: priceToStore } });
     }
     if (job.status !== 'Active') {
-      await recordJobStatus(jobId, 'Active', userEmail, `Assigned ${existingForInspector.inspector.name}`);
+      await recordJobStatus(
+        jobId,
+        'Active',
+        userEmail,
+        qeOverride
+          ? `Assigned ${existingForInspector.inspector.name} (QE requirement overridden)`
+          : `Assigned ${existingForInspector.inspector.name}`
+      );
     }
+    await recordAudit({
+      userId,
+      action: 'job.assigned',
+      entityType: 'Job',
+      entityId: jobId,
+      payload: {
+        inspectorId,
+        inspectorName: inspector.name,
+        role,
+        allocatedHours,
+        requiresQeApproval: job.requiresQeApproval,
+        qeOverride,
+        agreedPriceUsd: priceToStore,
+      },
+    });
     return prisma.assignment.findUniqueOrThrow({
       where: { id: existingForInspector.id },
       include: { inspector: true },
@@ -238,7 +257,14 @@ export async function assignInspector(
   }
 
   const action = job.assignments.length > 0 ? 'Reassigned to' : 'Assigned';
-  await recordJobStatus(jobId, 'Active', userEmail, `${action} ${inspector.name}`);
+  await recordJobStatus(
+    jobId,
+    'Active',
+    userEmail,
+    qeOverride
+      ? `${action} ${inspector.name} (QE requirement overridden)`
+      : `${action} ${inspector.name}`
+  );
   if (inspector.email) {
     await notifyUser(
       inspector.email,
@@ -259,6 +285,7 @@ export async function assignInspector(
       role,
       allocatedHours,
       requiresQeApproval: job.requiresQeApproval,
+      qeOverride,
       agreedPriceUsd: priceToStore,
     },
   });

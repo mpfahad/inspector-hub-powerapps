@@ -159,6 +159,7 @@ export function InspectorDetailPage() {
             <h1 className="text-2xl font-bold text-navy">{inspector.name}</h1>
             <p className="text-sm text-slate-500 mt-1">
               {inspector.employeeNo} · {inspector.department.name}
+              {inspector.jobTitle ? ` · ${inspector.jobTitle}` : ''}
               {inspector.baseLocation ? ` · ${inspector.baseLocation}` : ''}
               {inspector.highestQualification ? ` · ${inspector.highestQualification}` : ''}
             </p>
@@ -194,7 +195,7 @@ export function InspectorDetailPage() {
               <span>
                 <span className="text-sm font-medium text-navy">QE approved</span>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  When set, this inspector can be assigned to jobs that require a QE-approved inspector.
+                  When set, this inspector is preferred for jobs that ask for a QE-approved inspector.
                 </p>
               </span>
             </label>

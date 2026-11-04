@@ -30,7 +30,7 @@ export function JobBoardCard({ job }: { job: Job }) {
       <p className="text-xs text-slate-500 mt-2">
         {job.client.name}
         {job.jobType && <span> · {job.jobType.name}</span>}
-        {job.requiresQeApproval && <span className="text-amber-700"> · Needs QE-approved</span>}
+        {job.requiresQeApproval && <span className="text-amber-700"> · Prefers QE</span>}
       </p>
       <JobCertBadges summary={job.certSummary} compact />
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-xs">

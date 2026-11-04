@@ -41,9 +41,14 @@ export function normalizeLocation(value?: string | null): string | null {
 export function resolveCoords(primary: GeoPoint, fallback?: GeoPoint | null): { lat: number; lng: number } | null {
   const lat = primary.latitude ?? fallback?.latitude;
   const lng = primary.longitude ?? fallback?.longitude;
-  if (lat == null || lng == null) return null;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { lat, lng };
+  if (lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng)) {
+    return { lat, lng };
+  }
+  // Fall back to known Qatar place-name lookup when lat/lng were never stored.
+  const sample =
+    geocodeSampleLocation(primary.location) ?? geocodeSampleLocation(fallback?.location ?? null);
+  if (sample) return { lat: sample.latitude, lng: sample.longitude };
+  return null;
 }
 
 export function resolveLocationString(primary: GeoPoint, fallback?: GeoPoint | null): string | null {

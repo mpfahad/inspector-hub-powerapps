@@ -100,7 +100,40 @@ export function JobDetailPage() {
           <div>
             <dt className="text-slate-500">QE-approved inspector</dt>
             <dd className="font-medium">
-              {job.requiresQeApproval ? 'Required — assign only QE-approved inspectors' : 'Not required'}
+              {job.requiresQeApproval ? 'Preferred for this job' : 'Not required'}
+            </dd>
+          </div>
+          <div className="col-span-2">
+            <dt className="text-slate-500">Current assignment</dt>
+            <dd className="mt-1">
+              {openAssignment ? (
+                <div className="space-y-2">
+                  <div className="font-medium">
+                    <Link to={`/inspectors/${openAssignment.inspector.id}`} className="text-teal hover:underline">
+                      {openAssignment.inspector.name}
+                    </Link>
+                    <span className="text-slate-500 font-normal">
+                      {' '}
+                      ({openAssignment.inspector.employeeNo}) — {openAssignment.role} ·{' '}
+                    </span>
+                    <span className="badge bg-slate-100">
+                      {openAssignment.status === 'PendingAcceptance' ? 'Active' : openAssignment.status}
+                    </span>
+                    {openAssignment.inspector.qeApproved ? (
+                      <span className="badge bg-teal/10 text-teal ml-2">QE approved</span>
+                    ) : (
+                      <span className="badge bg-slate-100 text-slate-500 ml-2">Not QE-approved</span>
+                    )}
+                  </div>
+                  {job.requiresQeApproval && !openAssignment.inspector.qeApproved && (
+                    <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      Note: a non–QE-approved inspector is assigned while this job prefers QE approval.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <span className="text-slate-500">Unassigned</span>
+              )}
             </dd>
           </div>
         </dl>
@@ -120,45 +153,13 @@ export function JobDetailPage() {
         <JobProgressPanel progress={job.progress} completedAt={job.completedAt} />
       )}
 
-      {canAssign && <AssignInspectorPanel job={job} onAssigned={load} />}
-
-      {openAssignment && (
-        <div className="card p-6">
-          <h2 className="font-semibold mb-3">Current assignment</h2>
-          <div className="text-sm">
-            <Link to={`/inspectors/${openAssignment.inspector.id}`} className="text-teal hover:underline">
-              {openAssignment.inspector.name}
-            </Link>
-            {' '}— {openAssignment.role} ·{' '}
-            <span className="badge bg-slate-100">
-              {openAssignment.status === 'PendingAcceptance' ? 'Active' : openAssignment.status}
-            </span>
-            {openAssignment.inspector.qeApproved && (
-              <span className="badge bg-teal/10 text-teal ml-2">QE approved</span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {job.assignments.length > 0 && job.assignments.some((a) => ['Cancelled', 'Rejected'].includes(a.status)) && (
-        <div className="card p-6">
-          <h2 className="font-semibold mb-3 text-slate-500">Assignment history</h2>
-          {job.assignments
-            .filter((a) => ['Cancelled', 'Rejected'].includes(a.status))
-            .map((a) => (
-              <div key={a.id} className="text-sm py-2 border-b border-slate-100 last:border-0 text-slate-500">
-                {a.inspector.name} — {a.status}
-                {a.rejectReason ? `: ${a.rejectReason}` : ''}
-              </div>
-            ))}
-        </div>
-      )}
-
       {(job.status === 'Active' || job.status === 'PendingAcceptance' || job.status === 'Closed' || job.status === 'Completed') && (
         <ActivityLogPanel
           jobId={job.id}
           canLog={canLogActivity && (job.status === 'Active' || job.status === 'PendingAcceptance')}
           defaultInspectorId={logInspectorId}
+          defaultFrom={job.startDate.slice(0, 10)}
+          defaultTo={job.endDate.slice(0, 10)}
         />
       )}
 
@@ -191,7 +192,6 @@ export function JobDetailPage() {
       {(job.status === 'Active' || job.status === 'PendingAcceptance') && isCoordinator && !isInspector && activeAssignments.length > 0 && (
         <div className="card p-6 space-y-4">
           <h2 className="font-semibold">Mark complete on behalf of inspector</h2>
-          <p className="text-sm text-slate-500">Coordinator can submit completion when the inspector is unavailable.</p>
           {actionError && <p className="text-sm text-red-600">{actionError}</p>}
           <div>
             <label className="text-xs">Completion comments</label>
@@ -233,6 +233,20 @@ export function JobDetailPage() {
         </div>
       )}
 
+      {job.assignments.length > 0 && job.assignments.some((a) => ['Cancelled', 'Rejected'].includes(a.status)) && (
+        <div className="card p-6">
+          <h2 className="font-semibold mb-3 text-slate-500">Assignment history</h2>
+          {job.assignments
+            .filter((a) => ['Cancelled', 'Rejected'].includes(a.status))
+            .map((a) => (
+              <div key={a.id} className="text-sm py-2 border-b border-slate-100 last:border-0 text-slate-500">
+                {a.inspector.name} — {a.status}
+                {a.rejectReason ? `: ${a.rejectReason}` : ''}
+              </div>
+            ))}
+        </div>
+      )}
+
       <div className="card p-6">
         <h2 className="font-semibold mb-3">Status history</h2>
         {job.statusHistory.length === 0 ? (
@@ -248,6 +262,8 @@ export function JobDetailPage() {
           ))
         )}
       </div>
+
+      {canAssign && <AssignInspectorPanel job={job} onAssigned={load} />}
     </div>
   );
 }

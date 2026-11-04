@@ -80,6 +80,42 @@ export const priceChartSchema = z.object({
     .optional(),
 });
 
+export const createInspectorSchema = z.object({
+  employeeNo: z.string().trim().min(1).max(40),
+  name: z.string().trim().min(1).max(200),
+  departmentId: z.coerce.number().int().positive(),
+  email: z.string().trim().email().max(320).optional().nullable().or(z.literal('')),
+  jobTitle: z.string().trim().max(200).optional().nullable(),
+  hireDate: z
+    .union([z.literal(''), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'hireDate must be YYYY-MM-DD')])
+    .optional()
+    .nullable(),
+  baseLocation: z.string().trim().max(200).optional().nullable(),
+  weeklyCapacityHrs: z.coerce.number().finite().positive().max(168).optional(),
+  qeApproved: z.coerce.boolean().optional(),
+  status: z.enum(['Active', 'OnLeave', 'Training', 'Inactive']).optional(),
+});
+
+export const createClientSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  industry: z.string().trim().max(120).optional().nullable(),
+  location: z.string().trim().max(200).optional().nullable(),
+  latitude: z.coerce.number().finite().min(-90).max(90).optional().nullable(),
+  longitude: z.coerce.number().finite().min(-180).max(180).optional().nullable(),
+  contact: z.string().trim().max(200).optional().nullable(),
+  email: z.string().trim().email().max(320).optional().nullable().or(z.literal('')),
+});
+
+export const updateClientSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  industry: z.string().trim().max(120).optional().nullable(),
+  location: z.string().trim().max(200).optional().nullable(),
+  latitude: z.coerce.number().finite().min(-90).max(90).optional().nullable(),
+  longitude: z.coerce.number().finite().min(-180).max(180).optional().nullable(),
+  contact: z.string().trim().max(200).optional().nullable(),
+  email: z.string().trim().email().max(320).optional().nullable().or(z.literal('')),
+});
+
 export const createJobTypeSchema = z.object({
   code: z.string().trim().min(1).max(40),
   name: z.string().trim().min(1).max(200),
@@ -97,6 +133,13 @@ export const updateJobTypeSchema = z.object({
   defaultPriceUsd: optionalUsd,
 });
 
+export const createCertificationSchema = z.object({
+  code: z.string().trim().min(1).max(40),
+  name: z.string().trim().min(1).max(200),
+  issuer: z.string().trim().max(200).optional().nullable().or(z.literal('')),
+  validityMonths: z.coerce.number().int().positive().max(1200).optional().nullable(),
+});
+
 export const createActivityLogSchema = z.object({
   jobId: z.coerce.number().int().positive(),
   inspectorId: z.coerce.number().int().positive(),
@@ -105,6 +148,20 @@ export const createActivityLogSchema = z.object({
   productiveHours: z.coerce.number().finite().nonnegative().max(24),
   narrative: optionalText,
   qualityScore: z.coerce.number().int().min(0).max(100).optional(),
+});
+
+const activityLogEntrySchema = z.object({
+  logDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'logDate must be YYYY-MM-DD'),
+  hours: z.coerce.number().finite().nonnegative().max(24),
+  productiveHours: z.coerce.number().finite().nonnegative().max(24),
+  narrative: optionalText,
+  qualityScore: z.coerce.number().int().min(0).max(100).optional(),
+});
+
+export const createActivityLogBatchSchema = z.object({
+  jobId: z.coerce.number().int().positive(),
+  inspectorId: z.coerce.number().int().positive(),
+  entries: z.array(activityLogEntrySchema).min(1).max(62),
 });
 
 export const updateActivityLogSchema = z.object({

@@ -5,7 +5,11 @@ import { recordAudit } from '../services/audit.js';
 import { assertCanLogActivity, getInspectorForUser, isStaff } from '../services/authz.js';
 import { sendRouteError } from '../lib/httpErrors.js';
 import { validateBody } from '../lib/validate.js';
-import { createActivityLogSchema, updateActivityLogSchema } from '../lib/schemas.js';
+import {
+  createActivityLogSchema,
+  createActivityLogBatchSchema,
+  updateActivityLogSchema,
+} from '../lib/schemas.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -14,6 +18,11 @@ const logInclude = {
   inspector: { include: { department: true } },
   job: { include: { client: true } },
 };
+
+function dateKey(d: Date | string) {
+  const iso = typeof d === 'string' ? d : d.toISOString();
+  return iso.slice(0, 10);
+}
 
 async function canEditLog(user: AuthUser, log: { inspectorId: number }) {
   if (isStaff(user.role)) return true;
@@ -43,7 +52,7 @@ router.post('/', validateBody(createActivityLogSchema), async (req, res) => {
     data: {
       jobId: body.jobId,
       inspectorId: body.inspectorId,
-      logDate: new Date(body.logDate),
+      logDate: new Date(body.logDate + 'T12:00:00'),
       hours: body.hours,
       productiveHours: body.productiveHours,
       narrative: body.narrative,
@@ -59,6 +68,76 @@ router.post('/', validateBody(createActivityLogSchema), async (req, res) => {
     payload: { jobId: log.jobId, inspectorId: log.inspectorId, hours: log.hours, logDate: log.logDate },
   });
   res.status(201).json(log);
+});
+
+router.post('/batch', validateBody(createActivityLogBatchSchema), async (req, res) => {
+  const body = req.body as {
+    jobId: number;
+    inspectorId: number;
+    entries: {
+      logDate: string;
+      hours: number;
+      productiveHours: number;
+      narrative?: string | null;
+      qualityScore?: number;
+    }[];
+  };
+
+  try {
+    await assertCanLogActivity(body.jobId, body.inspectorId, req.user!);
+  } catch (err) {
+    sendRouteError(res, err, 'Cannot log activity');
+    return;
+  }
+
+  const existing = await prisma.activityLog.findMany({
+    where: { jobId: body.jobId, inspectorId: body.inspectorId },
+    select: { logDate: true },
+  });
+  const existingKeys = new Set(existing.map((e) => dateKey(e.logDate)));
+
+  const created = [];
+  const skipped: string[] = [];
+
+  for (const entry of body.entries) {
+    if (entry.hours <= 0 && entry.productiveHours <= 0) {
+      skipped.push(entry.logDate);
+      continue;
+    }
+    if (existingKeys.has(entry.logDate)) {
+      skipped.push(entry.logDate);
+      continue;
+    }
+    const log = await prisma.activityLog.create({
+      data: {
+        jobId: body.jobId,
+        inspectorId: body.inspectorId,
+        logDate: new Date(entry.logDate + 'T12:00:00'),
+        hours: entry.hours,
+        productiveHours: entry.productiveHours,
+        narrative: entry.narrative || null,
+        qualityScore: entry.qualityScore,
+      },
+      include: logInclude,
+    });
+    existingKeys.add(entry.logDate);
+    created.push(log);
+  }
+
+  await recordAudit({
+    userId: req.user!.id,
+    action: 'activityLog.batchCreated',
+    entityType: 'Job',
+    entityId: body.jobId,
+    payload: {
+      inspectorId: body.inspectorId,
+      created: created.length,
+      skipped: skipped.length,
+      skippedDates: skipped,
+    },
+  });
+
+  res.status(201).json({ created, skipped });
 });
 
 router.get('/', async (req, res) => {

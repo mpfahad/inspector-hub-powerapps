@@ -1,5 +1,13 @@
-import { useEffect, useState } from 'react';
-import { api, type Inspector, type Timesheet, type TimesheetPreview } from '../../lib/api';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  api,
+  type Department,
+  type Inspector,
+  type Job,
+  type JobType,
+  type Timesheet,
+  type TimesheetPreview,
+} from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { TimesheetPreviewPanel } from './TimesheetPreviewPanel';
 
@@ -11,8 +19,14 @@ type Props = {
 export function TimesheetGenerator({ compact, showHistory = true }: Props) {
   const { user } = useAuth();
   const [inspectors, setInspectors] = useState<Inspector[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [jobTypes, setJobTypes] = useState<JobType[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [history, setHistory] = useState<Timesheet[]>([]);
   const [inspectorId, setInspectorId] = useState('');
+  const [deptFilter, setDeptFilter] = useState('');
+  const [jobTypeFilter, setJobTypeFilter] = useState('');
+  const [inspectorSearch, setInspectorSearch] = useState('');
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [message, setMessage] = useState('');
@@ -28,8 +42,71 @@ export function TimesheetGenerator({ compact, showHistory = true }: Props) {
       setPeriodEnd(d.periodEnd);
     });
     if (showHistory) api.timesheets().then(setHistory);
-    if (isStaff) api.inspectors().then(setInspectors);
+    if (isStaff) {
+      Promise.all([api.inspectors(), api.departments(), api.jobTypes(), api.jobs()]).then(
+        ([ins, depts, types, jobList]) => {
+          setInspectors(ins);
+          setDepartments(depts);
+          setJobTypes(types);
+          setJobs(jobList);
+        }
+      );
+    }
   }, [isStaff, showHistory]);
+
+  const jobTypeScope = useMemo(() => {
+    const inspectorIds = new Map<number, Set<number>>();
+    const departmentIds = new Map<number, Set<number>>();
+    for (const job of jobs) {
+      const typeId = job.jobType?.id;
+      if (typeId == null) continue;
+      let iSet = inspectorIds.get(typeId);
+      if (!iSet) {
+        iSet = new Set();
+        inspectorIds.set(typeId, iSet);
+      }
+      let dSet = departmentIds.get(typeId);
+      if (!dSet) {
+        dSet = new Set();
+        departmentIds.set(typeId, dSet);
+      }
+      dSet.add(job.department.id);
+      for (const a of job.assignments ?? []) {
+        if (a.inspector?.id) iSet.add(a.inspector.id);
+      }
+    }
+    return { inspectorIds, departmentIds };
+  }, [jobs]);
+
+  const filteredInspectors = useMemo(() => {
+    const q = inspectorSearch.trim().toLowerCase();
+    const typeId = jobTypeFilter ? Number(jobTypeFilter) : null;
+    const typeInspectors = typeId != null ? jobTypeScope.inspectorIds.get(typeId) : null;
+    const typeDepts = typeId != null ? jobTypeScope.departmentIds.get(typeId) : null;
+
+    return inspectors
+      .filter((i) => {
+        if (deptFilter && String(i.department.id) !== deptFilter) return false;
+        if (typeId != null) {
+          const onJobs = typeInspectors?.has(i.id);
+          const inDept = typeDepts?.has(i.department.id);
+          if (!onJobs && !inDept) return false;
+        }
+        if (q) {
+          const hay = [i.name, i.employeeNo, i.jobTitle ?? '', i.department.name].join(' ').toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [inspectors, deptFilter, jobTypeFilter, inspectorSearch, jobTypeScope]);
+
+  useEffect(() => {
+    if (!inspectorId) return;
+    if (!filteredInspectors.some((i) => String(i.id) === inspectorId)) {
+      setInspectorId('');
+    }
+  }, [filteredInspectors, inspectorId]);
 
   const params = () => ({
     inspectorId: inspectorId ? Number(inspectorId) : undefined,
@@ -111,6 +188,8 @@ export function TimesheetGenerator({ compact, showHistory = true }: Props) {
     setViewingId(null);
   };
 
+  const filtersActive = Boolean(deptFilter || jobTypeFilter || inspectorSearch.trim());
+
   return (
     <div className={compact ? 'space-y-4' : 'space-y-8'}>
       {!compact && (
@@ -130,21 +209,96 @@ export function TimesheetGenerator({ compact, showHistory = true }: Props) {
           </div>
         )}
         {isStaff && (
-          <div>
-            <label className="text-xs font-medium">Inspector</label>
-            <select className="input mt-1" value={inspectorId} onChange={(e) => setInspectorId(e.target.value)}>
-              <option value="">Select inspector…</option>
-              {inspectors.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.name} ({i.employeeNo})
-                </option>
-              ))}
-            </select>
+          <div className="space-y-3">
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-medium text-slate-500">Department</label>
+                <select
+                  className="input mt-1"
+                  value={deptFilter}
+                  onChange={(e) => setDeptFilter(e.target.value)}
+                >
+                  <option value="">All departments</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500">Job type</label>
+                <select
+                  className="input mt-1"
+                  value={jobTypeFilter}
+                  onChange={(e) => setJobTypeFilter(e.target.value)}
+                >
+                  <option value="">All job types</option>
+                  {jobTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500">Search inspectors</label>
+                <input
+                  type="search"
+                  className="input mt-1"
+                  placeholder="Name, employee no, title…"
+                  value={inspectorSearch}
+                  onChange={(e) => setInspectorSearch(e.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-medium text-slate-500">Inspector</label>
+                <span className="text-xs text-slate-400">
+                  {filteredInspectors.length} of {inspectors.length}
+                  {filtersActive && (
+                    <>
+                      {' · '}
+                      <button
+                        type="button"
+                        className="text-teal hover:underline"
+                        onClick={() => {
+                          setDeptFilter('');
+                          setJobTypeFilter('');
+                          setInspectorSearch('');
+                        }}
+                      >
+                        Clear filters
+                      </button>
+                    </>
+                  )}
+                </span>
+              </div>
+              <select
+                className="input mt-1"
+                value={inspectorId}
+                onChange={(e) => setInspectorId(e.target.value)}
+              >
+                <option value="">Select inspector…</option>
+                {filteredInspectors.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name} ({i.employeeNo}) — {i.department.name}
+                    {i.jobTitle ? ` · ${i.jobTitle}` : ''}
+                  </option>
+                ))}
+              </select>
+              {jobTypeFilter && filteredInspectors.length === 0 && (
+                <p className="text-xs text-amber-800 mt-1">
+                  No inspectors found on jobs of this type. Clear the job type filter or pick another department.
+                </p>
+              )}
+            </div>
           </div>
         )}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-medium">Period start</label>
+            <label className="text-xs font-medium text-slate-500">Period start</label>
             <input
               type="date"
               className="input mt-1"
@@ -154,7 +308,7 @@ export function TimesheetGenerator({ compact, showHistory = true }: Props) {
             />
           </div>
           <div>
-            <label className="text-xs font-medium">Period end</label>
+            <label className="text-xs font-medium text-slate-500">Period end</label>
             <input
               type="date"
               className="input mt-1"

@@ -74,7 +74,7 @@ export function JobNewPage() {
     e.preventDefault();
     if (form.requiresQeApproval) {
       const ok = window.confirm(
-        'QE must approve the selected inspector before this job becomes Active. Hours cannot be logged until a manager (QE) approves. Continue?'
+        'This job will prefer QE-approved inspectors. Non–QE staff can still be assigned with a warning override. Continue?'
       );
       if (!ok) return;
     }
@@ -178,10 +178,10 @@ export function JobNewPage() {
               onChange={(e) => setForm({ ...form, requiresQeApproval: e.target.checked })}
             />
             <span>
-              <span className="text-sm font-medium text-navy">Requires QE-approved inspector</span>
+              <span className="text-sm font-medium text-navy">Prefers QE-approved inspector</span>
               <p className="text-xs text-slate-500 mt-0.5">
                 If off, any eligible inspector can be assigned and the job becomes Active immediately.
-                If on, you must assign someone already marked QE-approved on their inspector profile.
+                If on, QE-approved staff are preferred; non–QE staff can still be assigned with a warning override.
               </p>
             </span>
           </label>

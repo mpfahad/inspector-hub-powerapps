@@ -115,6 +115,8 @@ model Inspector {
   departmentId   Int
   department     Department      @relation(fields: [departmentId], references: [id])
   baseLocation   String?
+  /// HR job title (e.g. Lifting Inspector, Electrical Compex Inspector).
+  jobTitle       String?
   status         InspectorStatus @default(Active)
   hireDate       DateTime?
   yearsExperience Int            @default(0)

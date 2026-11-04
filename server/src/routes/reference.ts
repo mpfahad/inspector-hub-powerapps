@@ -5,7 +5,17 @@ import { recordAudit } from '../services/audit.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { getInspectorForUser, isAdmin, isStaff } from '../services/authz.js';
 import { validateBody } from '../lib/validate.js';
-import { inspectorCostsSchema, inspectorQeApprovedSchema } from '../lib/schemas.js';
+import {
+  createClientSchema,
+  updateClientSchema,
+  createInspectorSchema,
+  createCertificationSchema,
+  inspectorCostsSchema,
+  inspectorQeApprovedSchema,
+} from '../lib/schemas.js';
+import { geocodeSampleLocation } from '../lib/geo.js';
+import bcrypt from 'bcryptjs';
+import { IdentityProvider, UserRole } from '@prisma/client';
 
 const staffRoles = ['Coordinator', 'Manager', 'Admin'] as const;
 
@@ -88,10 +98,245 @@ function crudRouter(model: 'client' | 'inspector' | 'department' | 'certificatio
       return;
     }
     if (model === 'department') res.json(await prisma.department.findMany());
-    if (model === 'certification') res.json(await prisma.certification.findMany());
+    if (model === 'certification') {
+      res.json(await prisma.certification.findMany({ orderBy: { code: 'asc' } }));
+    }
   });
 
+  if (model === 'certification') {
+    router.post('/', requireRole(...staffRoles), validateBody(createCertificationSchema), async (req, res) => {
+      const body = req.body as {
+        code: string;
+        name: string;
+        issuer?: string | null;
+        validityMonths?: number | null;
+      };
+      const code = body.code.trim().toUpperCase();
+      const clash = await prisma.certification.findUnique({ where: { code } });
+      if (clash) {
+        res.status(409).json({ error: 'A qualification with this code already exists' });
+        return;
+      }
+      const created = await prisma.certification.create({
+        data: {
+          code,
+          name: body.name.trim(),
+          issuer: body.issuer?.trim() || null,
+          validityMonths: body.validityMonths ?? null,
+        },
+      });
+      await recordAudit({
+        userId: req.user!.id,
+        action: 'Certification.Create',
+        entityType: 'Certification',
+        entityId: created.id,
+        payload: { code: created.code, name: created.name },
+      });
+      res.status(201).json(created);
+    });
+  }
+
+  if (model === 'client') {
+    router.post('/', requireRole(...staffRoles), validateBody(createClientSchema), async (req, res) => {
+      const body = req.body as {
+        name: string;
+        industry?: string | null;
+        location?: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
+        contact?: string | null;
+        email?: string | null;
+      };
+
+      let latitude = body.latitude ?? null;
+      let longitude = body.longitude ?? null;
+      if (latitude == null || longitude == null) {
+        const geo = geocodeSampleLocation(body.location);
+        if (geo) {
+          latitude = geo.latitude;
+          longitude = geo.longitude;
+        }
+      }
+
+      const created = await prisma.client.create({
+        data: {
+          name: body.name,
+          industry: body.industry || null,
+          location: body.location || null,
+          latitude,
+          longitude,
+          contact: body.contact || null,
+          email: body.email ? body.email : null,
+        },
+      });
+
+      await recordAudit({
+        userId: req.user!.id,
+        action: 'Client.Create',
+        entityType: 'Client',
+        entityId: created.id,
+        payload: {
+          name: created.name,
+          location: created.location,
+          latitude: created.latitude,
+          longitude: created.longitude,
+        },
+      });
+
+      res.status(201).json(created);
+    });
+
+    router.put('/:id', requireRole(...staffRoles), validateBody(updateClientSchema), async (req, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        res.status(400).json({ error: 'Invalid client id' });
+        return;
+      }
+      const existing = await prisma.client.findUnique({ where: { id } });
+      if (!existing) {
+        res.status(404).json({ error: 'Client not found' });
+        return;
+      }
+
+      const body = req.body as {
+        name?: string;
+        industry?: string | null;
+        location?: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
+        contact?: string | null;
+        email?: string | null;
+      };
+
+      const nextLocation = body.location !== undefined ? body.location || null : existing.location;
+      let latitude = body.latitude !== undefined ? body.latitude : existing.latitude;
+      let longitude = body.longitude !== undefined ? body.longitude : existing.longitude;
+
+      // If location changed and coords were not explicitly sent, try place-name geocode.
+      if (body.location !== undefined && body.latitude === undefined && body.longitude === undefined) {
+        const geo = geocodeSampleLocation(nextLocation);
+        if (geo) {
+          latitude = geo.latitude;
+          longitude = geo.longitude;
+        }
+      }
+
+      const updated = await prisma.client.update({
+        where: { id },
+        data: {
+          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(body.industry !== undefined ? { industry: body.industry || null } : {}),
+          ...(body.location !== undefined ? { location: nextLocation } : {}),
+          ...(body.latitude !== undefined || body.longitude !== undefined || body.location !== undefined
+            ? { latitude, longitude }
+            : {}),
+          ...(body.contact !== undefined ? { contact: body.contact || null } : {}),
+          ...(body.email !== undefined ? { email: body.email ? body.email : null } : {}),
+        },
+      });
+
+      await recordAudit({
+        userId: req.user!.id,
+        action: 'Client.Update',
+        entityType: 'Client',
+        entityId: updated.id,
+        payload: {
+          name: updated.name,
+          location: updated.location,
+          latitude: updated.latitude,
+          longitude: updated.longitude,
+        },
+      });
+
+      res.json(updated);
+    });
+  }
+
   if (model === 'inspector') {
+    router.post('/', requireRole(...staffRoles), validateBody(createInspectorSchema), async (req, res) => {
+      const body = req.body as {
+        employeeNo: string;
+        name: string;
+        departmentId: number;
+        email?: string | null;
+        jobTitle?: string | null;
+        hireDate?: string | null;
+        baseLocation?: string | null;
+        weeklyCapacityHrs?: number;
+        qeApproved?: boolean;
+        status?: 'Active' | 'OnLeave' | 'Training' | 'Inactive';
+      };
+
+      const department = await prisma.department.findUnique({ where: { id: body.departmentId } });
+      if (!department) {
+        res.status(400).json({ error: 'Department not found' });
+        return;
+      }
+
+      const clash = await prisma.inspector.findUnique({ where: { employeeNo: body.employeeNo } });
+      if (clash) {
+        res.status(409).json({ error: 'Employee number already exists' });
+        return;
+      }
+
+      const email = body.email?.trim() ? body.email.trim().toLowerCase() : null;
+      let userId: number | null = null;
+      if (email) {
+        const existingUser = await prisma.user.findUnique({ where: { email } });
+        if (existingUser) {
+          if (existingUser.role !== UserRole.Inspector) {
+            res.status(409).json({ error: 'Email belongs to a non-inspector user' });
+            return;
+          }
+          userId = existingUser.id;
+        } else {
+          const passwordHash = await bcrypt.hash('password123', 10);
+          const user = await prisma.user.create({
+            data: {
+              email,
+              passwordHash,
+              fullName: body.name,
+              role: UserRole.Inspector,
+              identityProvider: IdentityProvider.local,
+            },
+          });
+          userId = user.id;
+        }
+      }
+
+      const created = await prisma.inspector.create({
+        data: {
+          employeeNo: body.employeeNo,
+          name: body.name,
+          departmentId: body.departmentId,
+          email,
+          userId,
+          jobTitle: body.jobTitle || null,
+          hireDate: body.hireDate ? new Date(body.hireDate + 'T12:00:00') : null,
+          baseLocation: body.baseLocation || null,
+          weeklyCapacityHrs: body.weeklyCapacityHrs ?? 40,
+          qeApproved: body.qeApproved ?? false,
+          status: body.status ?? 'Active',
+        },
+        include: { department: true, inspectorCerts: { include: { certification: true } } },
+      });
+
+      await recordAudit({
+        userId: req.user!.id,
+        action: 'Inspector.Create',
+        entityType: 'Inspector',
+        entityId: created.id,
+        payload: {
+          employeeNo: created.employeeNo,
+          name: created.name,
+          departmentId: created.departmentId,
+          jobTitle: created.jobTitle,
+        },
+      });
+
+      res.status(201).json(created);
+    });
+
     router.get('/:id', async (req, res) => {
       const id = Number(req.params.id);
       const admin = isAdmin(req.user!.role);

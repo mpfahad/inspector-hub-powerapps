@@ -52,6 +52,7 @@ async function main() {
     prisma.department.create({ data: { name: 'NDT Inspection', code: 'NDT', managerEmail: 'marcus.mgr@irppms.local' } }),
     prisma.department.create({ data: { name: 'Electrical Inspection', code: 'ELEC', managerEmail: 'manager@irppms.local' } }),
     prisma.department.create({ data: { name: 'Lifting', code: 'LIFT', managerEmail: 'manager@irppms.local' } }),
+    prisma.department.create({ data: { name: 'Rigs', code: 'RIGS', managerEmail: 'manager@irppms.local' } }),
     prisma.department.create({ data: { name: 'Unassigned', code: 'HOLD', managerEmail: 'coordinator@irppms.local' } }),
   ]);
   const liftingDept = depts[3];

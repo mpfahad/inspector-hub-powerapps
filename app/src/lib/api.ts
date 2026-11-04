@@ -117,9 +117,48 @@ export const api = {
   },
   timesheetPdfUrl: (id: number) => `${API}/api/timesheets/${id}/pdf`,
   clients: () => request<Client[]>('/api/clients'),
+  createClient: (data: {
+    name: string;
+    industry?: string | null;
+    location?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    contact?: string | null;
+    email?: string | null;
+  }) => request<Client>('/api/clients', { method: 'POST', body: JSON.stringify(data) }),
+  updateClient: (
+    id: number,
+    data: {
+      name?: string;
+      industry?: string | null;
+      location?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+      contact?: string | null;
+      email?: string | null;
+    }
+  ) => request<Client>(`/api/clients/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   departments: () => request<Department[]>('/api/departments'),
   certifications: () => request<Certification[]>('/api/certifications'),
+  createCertification: (data: {
+    code: string;
+    name: string;
+    issuer?: string | null;
+    validityMonths?: number | null;
+  }) => request<Certification>('/api/certifications', { method: 'POST', body: JSON.stringify(data) }),
   inspectors: () => request<Inspector[]>('/api/inspectors'),
+  createInspector: (data: {
+    employeeNo: string;
+    name: string;
+    departmentId: number;
+    email?: string | null;
+    jobTitle?: string | null;
+    hireDate?: string | null;
+    baseLocation?: string | null;
+    weeklyCapacityHrs?: number;
+    qeApproved?: boolean;
+    status?: string;
+  }) => request<Inspector>('/api/inspectors', { method: 'POST', body: JSON.stringify(data) }),
   inspector: (id: number) => request<InspectorDetail>(`/api/inspectors/${id}`),
   addInspectorCert: (
     inspectorId: number,
@@ -159,6 +198,21 @@ export const api = {
   },
   createActivityLog: (data: ActivityLogPayload) =>
     request<ActivityLog>('/api/activity-logs', { method: 'POST', body: JSON.stringify(data) }),
+  createActivityLogsBatch: (data: {
+    jobId: number;
+    inspectorId: number;
+    entries: {
+      logDate: string;
+      hours: number;
+      productiveHours: number;
+      narrative?: string;
+      qualityScore?: number;
+    }[];
+  }) =>
+    request<{ created: ActivityLog[]; skipped: string[] }>('/api/activity-logs/batch', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   updateActivityLog: (id: number, data: Partial<ActivityLogPayload>) =>
     request<ActivityLog>(`/api/activity-logs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteActivityLog: (id: number) =>
@@ -231,10 +285,12 @@ export type User = { id: number; email: string; role: string; fullName: string; 
 export type Client = {
   id: number;
   name: string;
-  industry?: string;
-  location?: string;
+  industry?: string | null;
+  location?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  contact?: string | null;
+  email?: string | null;
 };
 export type Department = { id: number; name: string; code: string };
 export type Certification = { id: number; code: string; name: string };
@@ -253,6 +309,7 @@ export type Inspector = {
   email?: string;
   department: Department;
   status: string;
+  jobTitle?: string | null;
   qeApproved?: boolean;
   highestQualification?: string | null;
   dailyCostUsd?: number | null;

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, type Client, type Department, type Inspector, type InspectorCert } from '../lib/api';
+import { api, type Client, type Department, type Inspector, type InspectorCert, type Job } from '../lib/api';
 import { formatMoney } from '../lib/money';
 import { useAuth } from '../context/AuthContext';
+import { useOptionalDepartment } from '../context/DepartmentContext';
+import { currentAssignment } from '../lib/jobs';
 
 function certBadgeClass(status: string) {
   if (status === 'Valid') return 'bg-teal/10 text-teal';
@@ -68,13 +70,16 @@ function matchesInspectorSearch(i: Inspector, q: string) {
 export function InspectorsPage() {
   const { user } = useAuth();
   const isAdminUser = user?.role === 'Admin';
+  const deptCtx = useOptionalDepartment();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlDept = searchParams.get('dept')?.trim() || '';
+  const contextDept = deptCtx?.department?.name || deptCtx?.department?.code || '';
 
   const [items, setItems] = useState<Inspector[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [loanJobs, setLoanJobs] = useState<Job[]>([]);
   const [search, setSearch] = useState('');
-  const [deptFilter, setDeptFilter] = useState(urlDept);
+  const [deptFilter, setDeptFilter] = useState(contextDept || urlDept);
   const [statusFilter, setStatusFilter] = useState('');
   const [qeFilter, setQeFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [form, setForm] = useState(emptyEmployeeForm);
@@ -86,20 +91,26 @@ export function InspectorsPage() {
   useEffect(() => {
     load();
     api.departments().then(setDepartments).catch(() => setDepartments([]));
+    api.jobsBoard().then((board) => {
+      const jobs = [...board.columns.new, ...board.columns.active, ...board.columns.completed];
+      setLoanJobs(jobs);
+    }).catch(() => setLoanJobs([]));
   }, []);
 
   useEffect(() => {
-    setDeptFilter(urlDept);
-  }, [urlDept]);
+    if (contextDept) setDeptFilter(contextDept);
+    else setDeptFilter(urlDept);
+  }, [contextDept, urlDept]);
 
   useEffect(() => {
     if (!departments.length) return;
     const preferred =
+      deptCtx?.department ??
       departments.find((d) => d.name === deptFilter || d.code === deptFilter) ??
       departments.find((d) => d.code === 'RIGS') ??
       departments[0];
-    setForm((f) => (f.departmentId ? f : { ...f, departmentId: String(preferred.id) }));
-  }, [departments, deptFilter]);
+    setForm((f) => ({ ...f, departmentId: String(preferred.id) }));
+  }, [departments, deptFilter, deptCtx?.department]);
 
   const setDepartmentFilter = (value: string) => {
     setDeptFilter(value);
@@ -122,6 +133,36 @@ export function InspectorsPage() {
       return true;
     });
   }, [items, deptFilter, statusFilter, qeFilter, search]);
+
+  /** Home-dept inspectors who are assigned to a job in another department. */
+  const loanedOut = useMemo(() => {
+    const map = new Map<number, { jobRef: string; jobDept: string }>();
+    for (const job of loanJobs) {
+      const a = currentAssignment(job);
+      if (!a) continue;
+      if (a.inspector.department?.id === job.department.id) continue;
+      if (deptFilter && a.inspector.department?.name !== deptFilter && a.inspector.department?.code !== deptFilter) {
+        continue;
+      }
+      map.set(a.inspector.id, { jobRef: job.ref, jobDept: job.department.name });
+    }
+    return map;
+  }, [loanJobs, deptFilter]);
+
+  /** Other-dept inspectors currently working on this department's jobs. */
+  const borrowedIn = useMemo(() => {
+    if (!deptFilter) return [] as { inspector: Inspector; jobRef: string }[];
+    const out: { inspector: Inspector; jobRef: string }[] = [];
+    for (const job of loanJobs) {
+      if (job.department.name !== deptFilter && job.department.code !== deptFilter) continue;
+      const a = currentAssignment(job);
+      if (!a?.inspector?.department) continue;
+      if (a.inspector.department.name === deptFilter || a.inspector.department.code === deptFilter) continue;
+      const full = items.find((i) => i.id === a.inspector.id);
+      if (full) out.push({ inspector: full, jobRef: job.ref });
+    }
+    return out;
+  }, [loanJobs, deptFilter, items]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, { id: number; name: string; code: string; rows: Inspector[] }>();
@@ -428,6 +469,32 @@ export function InspectorsPage() {
       )}
 
       <div className="space-y-4">
+        {borrowedIn.length > 0 && (
+          <div className="card overflow-hidden border-amber-200">
+            <div className="px-4 py-3 bg-amber-50 border-b border-amber-100">
+              <h2 className="font-semibold text-amber-950">Borrowed from other departments</h2>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Working on this department’s jobs — utilization still counts on their home department.
+              </p>
+            </div>
+            <ul className="divide-y divide-amber-50">
+              {borrowedIn.map(({ inspector: i, jobRef }) => (
+                <li key={`${i.id}-${jobRef}`} className="px-4 py-3 text-sm flex flex-wrap items-center gap-2">
+                  <Link
+                    to={deptCtx?.deptPath(`inspectors/${i.id}`) ?? `/inspectors/${i.id}`}
+                    className="font-medium text-navy hover:text-teal"
+                  >
+                    {i.name}
+                  </Link>
+                  <span className="text-slate-400">({i.employeeNo})</span>
+                  <span className="badge bg-amber-100 text-amber-900">{i.department.name}</span>
+                  <span className="text-xs text-amber-800">on {jobRef}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {grouped.map((group) => (
           <div key={group.id} className="card overflow-hidden">
             <div className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 border-b border-slate-100">
@@ -458,36 +525,52 @@ export function InspectorsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {group.rows.map((i) => (
-                    <tr key={i.id} className="border-t border-slate-100 align-top">
-                      <td className="p-3 font-medium">
-                        <Link to={`/inspectors/${i.id}`} className="text-navy hover:text-teal">
-                          {i.name}
-                        </Link>
-                      </td>
-                      <td className="p-3">{i.employeeNo}</td>
-                      <td className="p-3 text-slate-600">{i.jobTitle || '—'}</td>
-                      {isAdminUser && (
-                        <>
-                          <td className="p-3">{formatMoney(i.dailyCostUsd)}</td>
-                          <td className="p-3">{formatMoney(i.dailyBillableUsd)}</td>
-                        </>
-                      )}
-                      <td className="p-3">
-                        {i.qeApproved ? (
-                          <span className="badge bg-teal/10 text-teal">Yes</span>
-                        ) : (
-                          <span className="badge bg-slate-100 text-slate-500">No</span>
+                  {group.rows.map((i) => {
+                    const loan = loanedOut.get(i.id);
+                    const href = deptCtx?.deptPath(`inspectors/${i.id}`) ?? `/inspectors/${i.id}`;
+                    return (
+                      <tr
+                        key={i.id}
+                        className={`border-t border-slate-100 align-top ${loan ? 'bg-amber-50/50' : ''}`}
+                      >
+                        <td className="p-3 font-medium">
+                          <Link to={href} className="text-navy hover:text-teal">
+                            {i.name}
+                          </Link>
+                          {loan && (
+                            <div className="text-xs text-amber-800 mt-1">
+                              On loan · {loan.jobDept} · {loan.jobRef}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3">{i.employeeNo}</td>
+                        <td className="p-3 text-slate-600">{i.jobTitle || '—'}</td>
+                        {isAdminUser && (
+                          <>
+                            <td className="p-3">{formatMoney(i.dailyCostUsd)}</td>
+                            <td className="p-3">{formatMoney(i.dailyBillableUsd)}</td>
+                          </>
                         )}
-                      </td>
-                      <td className="p-3 max-w-md">
-                        <QualificationBadges certs={i.inspectorCerts ?? []} />
-                      </td>
-                      <td className="p-3">
-                        <span className="badge bg-slate-100">{i.status}</span>
-                      </td>
-                    </tr>
-                  ))}
+                        <td className="p-3">
+                          {i.qeApproved ? (
+                            <span className="badge bg-teal/10 text-teal">Yes</span>
+                          ) : (
+                            <span className="badge bg-slate-100 text-slate-500">No</span>
+                          )}
+                        </td>
+                        <td className="p-3 max-w-md">
+                          <QualificationBadges certs={i.inspectorCerts ?? []} />
+                        </td>
+                        <td className="p-3">
+                          {loan ? (
+                            <span className="badge bg-amber-100 text-amber-900">On loan</span>
+                          ) : (
+                            <span className="badge bg-slate-100">{i.status}</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -532,9 +615,21 @@ export function ClientsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [clientSearch, setClientSearch] = useState('');
 
   const load = () => api.clients().then(setItems).catch(() => setItems([]));
   useEffect(() => { load(); }, []);
+
+  const visibleClients = useMemo(() => {
+    const q = clientSearch.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((c) =>
+      [c.name, c.industry ?? '', c.location ?? '', c.contact ?? '', c.email ?? '']
+        .join(' ')
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [items, clientSearch]);
 
   const onMap = (c: Client) => c.latitude != null && c.longitude != null;
 
@@ -624,6 +719,14 @@ export function ClientsPage() {
         </button>
       </div>
 
+      <input
+        type="search"
+        className="input max-w-md"
+        placeholder="Search clients by name, industry, location…"
+        value={clientSearch}
+        onChange={(e) => setClientSearch(e.target.value)}
+      />
+
       {showForm && (
         <form onSubmit={submit} className="card p-5 space-y-4 max-w-2xl">
           <h2 className="text-sm font-semibold text-navy">
@@ -690,7 +793,7 @@ export function ClientsPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {items.map((c) => (
+        {visibleClients.map((c) => (
           <div key={c.id} className="card p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -721,6 +824,9 @@ export function ClientsPage() {
         ))}
       </div>
       {items.length === 0 && <p className="text-sm text-slate-500">No clients yet. Add one to use on jobs and the map.</p>}
+      {items.length > 0 && visibleClients.length === 0 && (
+        <p className="text-sm text-slate-500">No clients match “{clientSearch}”.</p>
+      )}
     </div>
   );
 }

@@ -18,9 +18,13 @@ export async function resolveDefaultPriceUsd(job: { jobTypeId: number | null }):
   return global?.priceUsd ?? null;
 }
 
-export async function getPriceChart() {
+export async function getPriceChart(departmentId?: number) {
   const [types, rows] = await Promise.all([
-    prisma.jobType.findMany({ orderBy: { name: 'asc' } }),
+    prisma.jobType.findMany({
+      where: departmentId ? { departmentId } : undefined,
+      include: { department: true },
+      orderBy: { name: 'asc' },
+    }),
     prisma.priceChart.findMany(),
   ]);
   const byType = new Map(rows.filter((r) => r.jobTypeId != null).map((r) => [r.jobTypeId!, r]));
@@ -31,6 +35,8 @@ export async function getPriceChart() {
       jobTypeId: t.id,
       code: t.code,
       name: t.name,
+      departmentId: t.departmentId,
+      departmentName: t.department.name,
       priceUsd: t.defaultPriceUsd ?? byType.get(t.id)?.priceUsd ?? global?.priceUsd ?? null,
     })),
   };

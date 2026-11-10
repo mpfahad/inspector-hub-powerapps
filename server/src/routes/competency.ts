@@ -18,11 +18,22 @@ function daysToExpiry(expiresOn: Date) {
   return Math.round((expiresOn.getTime() - Date.now()) / 86400000);
 }
 
-router.get('/', requireRole(...STAFF_ROLES), async (_req, res) => {
+router.get('/', requireRole(...STAFF_ROLES), async (req, res) => {
+  const departmentId = req.query.departmentId ? Number(req.query.departmentId) : undefined;
+  const departmentCode =
+    typeof req.query.departmentCode === 'string' ? req.query.departmentCode.trim().toUpperCase() : undefined;
+
+  const departmentFilter =
+    departmentId && Number.isFinite(departmentId)
+      ? { departmentId }
+      : departmentCode
+        ? { department: { code: departmentCode } }
+        : {};
+
   const [certifications, inspectors] = await Promise.all([
     prisma.certification.findMany({ orderBy: { code: 'asc' } }),
     prisma.inspector.findMany({
-      where: { status: { not: 'Inactive' } },
+      where: { status: { not: 'Inactive' }, ...departmentFilter },
       include: {
         department: true,
         inspectorCerts: { include: { certification: true } },

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type ActivityReport, type CostReport, type InspectorPerformanceRow, type OverdueJobsReport, type OverdueTrendPoint, type ProductivityTrendPoint, type ReportOverdueJob, type ReportsData } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useDepartment } from '../context/DepartmentContext';
 import { formatMoney } from '../lib/money';
 
 type PeriodKey = 'this_month' | 'last_month' | 'custom';
@@ -356,7 +357,7 @@ function overdueTypeLabel(type: ReportOverdueJob['overdueType']) {
 type OverdueFilterKey = 'this_month' | 'last_month' | 'custom';
 const OVERDUE_PREVIEW_LIMIT = 5;
 
-function ActivityReportCard() {
+function ActivityReportCard({ departmentId, departmentName }: { departmentId: number; departmentName: string }) {
   const thisMonth = useMemo(() => periodPresetRange('this_month'), []);
   const [filterKey, setFilterKey] = useState<PeriodKey>('this_month');
   const [customStart, setCustomStart] = useState(thisMonth.periodStart);
@@ -376,11 +377,11 @@ function ActivityReportCard() {
   useEffect(() => {
     setLoading(true);
     api
-      .activityReport({ periodStart: period.periodStart, periodEnd: period.periodEnd })
+      .activityReport({ periodStart: period.periodStart, periodEnd: period.periodEnd, departmentId })
       .then(setData)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [period.periodStart, period.periodEnd]);
+  }, [period.periodStart, period.periodEnd, departmentId]);
 
   return (
     <div className="card p-6">
@@ -388,7 +389,7 @@ function ActivityReportCard() {
         <div>
           <h2 className="text-base font-semibold text-navy">Activity</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Who logged hours and narrative on which jobs · {period.label} ({period.periodStart} → {period.periodEnd})
+            Hours logged on {departmentName} jobs · {period.label} ({period.periodStart} → {period.periodEnd})
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
@@ -469,7 +470,7 @@ function ActivityReportCard() {
   );
 }
 
-function CostReportCard() {
+function CostReportCard({ departmentId, departmentName }: { departmentId: number; departmentName: string }) {
   const thisMonth = useMemo(() => periodPresetRange('this_month'), []);
   const [filterKey, setFilterKey] = useState<PeriodKey>('this_month');
   const [customStart, setCustomStart] = useState(thisMonth.periodStart);
@@ -490,7 +491,7 @@ function CostReportCard() {
     setLoading(true);
     setError('');
     api
-      .costReport({ periodStart: period.periodStart, periodEnd: period.periodEnd })
+      .costReport({ periodStart: period.periodStart, periodEnd: period.periodEnd, departmentId })
       .then((r) => {
         if (!cancelled) setData(r);
       })
@@ -503,7 +504,7 @@ function CostReportCard() {
     return () => {
       cancelled = true;
     };
-  }, [period.periodStart, period.periodEnd]);
+  }, [period.periodStart, period.periodEnd, departmentId]);
 
   return (
     <div className="card p-6 space-y-4">
@@ -511,7 +512,7 @@ function CostReportCard() {
         <div>
           <h2 className="text-base font-semibold text-navy">Cost &amp; margin</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Admin only · logged hours × daily CTC (assignment snapshot preferred) vs agreed job price
+            Admin only · {departmentName} jobs · logged hours × daily CTC vs agreed job price
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -658,7 +659,7 @@ function CostReportCard() {
   );
 }
 
-function OverdueJobsCard() {
+function OverdueJobsCard({ departmentId, departmentName }: { departmentId: number; departmentName: string }) {
   const thisMonth = useMemo(() => periodPresetRange('this_month'), []);
   const [filterKey, setFilterKey] = useState<OverdueFilterKey>('this_month');
   const [customStart, setCustomStart] = useState(thisMonth.periodStart);
@@ -680,11 +681,11 @@ function OverdueJobsCard() {
     setShowAll(false);
     setLoading(true);
     api
-      .overdueJobs({ periodStart: period.periodStart, periodEnd: period.periodEnd })
+      .overdueJobs({ periodStart: period.periodStart, periodEnd: period.periodEnd, departmentId })
       .then(setData)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [period.periodStart, period.periodEnd]);
+  }, [period.periodStart, period.periodEnd, departmentId]);
 
   const items = useMemo(() => {
     const rows = data?.items ?? [];
@@ -699,7 +700,7 @@ function OverdueJobsCard() {
         <div>
           <h2 className="text-base font-semibold text-navy">Overdue jobs</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Active overdue and late-completed jobs · {period.label} ({period.periodStart} → {period.periodEnd})
+            {departmentName} jobs · active overdue and late-completed · {period.label} ({period.periodStart} → {period.periodEnd})
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
@@ -841,6 +842,7 @@ const reportCatalog = [
 
 export function ReportsPage() {
   const { user } = useAuth();
+  const { department: dept } = useDepartment();
   const isAdminUser = user?.role === 'Admin';
   const thisMonth = useMemo(() => periodPresetRange('this_month'), []);
   const [periodKey, setPeriodKey] = useState<PeriodKey>('this_month');
@@ -859,14 +861,16 @@ export function ReportsPage() {
   }, [periodKey, customStart, customEnd]);
 
   useEffect(() => {
+    if (!dept) return;
     setLoading(true);
     api
-      .reports({ periodStart: period.periodStart, periodEnd: period.periodEnd })
+      .reports({ periodStart: period.periodStart, periodEnd: period.periodEnd, departmentId: dept.id })
       .then(setData)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [period.periodStart, period.periodEnd]);
+  }, [period.periodStart, period.periodEnd, dept?.id]);
 
+  if (!dept) return <p className="text-slate-500">Loading department…</p>;
   if (loading && !data) return <p className="text-slate-500">Loading reports…</p>;
   if (!data) return <p className="text-red-600">Could not load reports.</p>;
 
@@ -877,9 +881,9 @@ export function ReportsPage() {
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-teal mb-1">Insights</p>
-          <h1 className="text-2xl font-bold text-navy">Reports & Analytics</h1>
+          <h1 className="text-2xl font-bold text-navy">Reports & Analytics · {dept.name}</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Operational KPIs and inspector performance — {period.label} ({data.period.start} → {data.period.end})
+            Utilization by home dept · job metrics by job dept — {period.label} ({data.period.start} → {data.period.end})
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
@@ -927,13 +931,13 @@ export function ReportsPage() {
         </div>
       </div>
 
-      <ActivityReportCard />
+      <ActivityReportCard departmentId={dept.id} departmentName={dept.name} />
 
-      {isAdminUser && <CostReportCard />}
+      {isAdminUser && <CostReportCard departmentId={dept.id} departmentName={dept.name} />}
 
       <div className="card p-6">
         <h2 className="text-base font-semibold text-navy mb-1">Productivity scorecard</h2>
-        <p className="text-xs text-slate-500 mb-5">{period.label} · all departments</p>
+        <p className="text-xs text-slate-500 mb-5">{period.label} · {dept.name} inspectors</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Scorecard label="Utilization" value={`${scorecard.utilization}%`} sub="Avg logged vs capacity" />
           <Scorecard
@@ -953,7 +957,7 @@ export function ReportsPage() {
         <ProductivityTrendChart points={data.productivityTrend} />
       </div>
 
-      <OverdueJobsCard />
+      <OverdueJobsCard departmentId={dept.id} departmentName={dept.name} />
 
       {data.methodology && (
         <div className="card p-6">

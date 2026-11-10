@@ -42,21 +42,40 @@ export const updateJobSchema = z.object({
   agreedPriceUsd: optionalUsd,
 });
 
+const dateYmd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD');
+
 export const assignJobSchema = z.object({
   inspectorId: z.coerce.number().int().positive(),
   role: z.string().trim().max(80).optional(),
   allocatedHours: z.coerce.number().finite().nonnegative().max(10000).optional(),
   agreedPriceUsd: optionalUsd,
+  mobDate: dateYmd.optional(),
+  demobDate: dateYmd.optional(),
+  /** When true and team is already at requiredInspectorCount, allow adding another member. */
+  allowOverfill: z.coerce.boolean().optional(),
+});
+
+export const completeJobMemberSchema = z.object({
+  assignmentId: z.coerce.number().int().positive(),
+  mobDate: dateYmd.optional().nullable(),
+  demobDate: dateYmd.optional().nullable(),
+  dailyCostUsd: optionalUsd,
+  dailyBillableUsd: optionalUsd,
 });
 
 export const completeJobSchema = z.object({
   inspectorId: z.coerce.number().int().positive(),
   comments: z.string().trim().max(8000).optional(),
   agreedPriceUsd: optionalUsd,
+  members: z.array(completeJobMemberSchema).optional(),
 });
 
 export const updateJobPriceSchema = z.object({
   agreedPriceUsd: z.coerce.number().finite().nonnegative().max(1_000_000),
+});
+
+export const cancelJobSchema = z.object({
+  note: z.string().trim().min(5).max(2000),
 });
 
 export const inspectorCostsSchema = z.object({
@@ -117,6 +136,7 @@ export const updateClientSchema = z.object({
 });
 
 export const createJobTypeSchema = z.object({
+  departmentId: z.coerce.number().int().positive(),
   code: z.string().trim().min(1).max(40),
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2000).optional().nullable(),
@@ -125,6 +145,7 @@ export const createJobTypeSchema = z.object({
 });
 
 export const updateJobTypeSchema = z.object({
+  departmentId: z.coerce.number().int().positive().optional(),
   code: z.string().trim().min(1).max(40).optional(),
   name: z.string().trim().min(1).max(200).optional(),
   description: z.string().trim().max(2000).optional().nullable(),

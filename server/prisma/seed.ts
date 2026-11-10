@@ -104,9 +104,12 @@ async function main() {
     update: {},
   });
 
+  const mechDept = depts[0];
+  const ndtDept = depts[1];
   const jobTypes = await Promise.all([
     prisma.jobType.create({
       data: {
+        departmentId: mechDept.id,
         code: 'PVI',
         name: 'Pressure Vessel Inspection',
         description: 'API 510 pressure vessel and tank inspections',
@@ -116,6 +119,7 @@ async function main() {
     }),
     prisma.jobType.create({
       data: {
+        departmentId: ndtDept.id,
         code: 'NDT-UT',
         name: 'NDT Ultrasonic Survey',
         description: 'Ultrasonic and phased-array NDT surveys',
@@ -130,6 +134,7 @@ async function main() {
     }),
     prisma.jobType.create({
       data: {
+        departmentId: mechDept.id,
         code: 'WELD',
         name: 'Welding Inspection',
         description: 'Welding and fabrication quality inspections',
@@ -139,6 +144,7 @@ async function main() {
     }),
     prisma.jobType.create({
       data: {
+        departmentId: mechDept.id,
         code: 'MECH',
         name: 'General Mechanical Inspection',
         description: 'Routine mechanical integrity inspections',

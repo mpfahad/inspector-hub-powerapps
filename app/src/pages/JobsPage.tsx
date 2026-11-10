@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { api, type Job, type MapData } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { lastDeptCode, useOptionalDepartment } from '../context/DepartmentContext';
 import { InspectorJobsView } from '../components/jobs/InspectorJobsView';
 import { JobBoardCard, JobListRow } from '../components/jobs/JobBoardCard';
+import { AssignInspectorModal } from '../components/jobs/AssignInspectorModal';
 import { JobsMapPanel } from '../components/jobs/JobsMapPanel';
 import { JOB_STAGES, type JobStageId, matchesSearch, stageForJob } from '../lib/jobs';
 import { TimesheetGenerator } from '../components/timesheets/TimesheetGenerator';
@@ -40,9 +43,13 @@ function StatChip({
 function BoardColumn({
   stage,
   jobs,
+  onAssign,
+  onReassign,
 }: {
   stage: (typeof JOB_STAGES)[number];
   jobs: Job[];
+  onAssign: (job: Job) => void;
+  onReassign: (job: Job) => void;
 }) {
   return (
     <div className="min-w-[280px] w-[280px] shrink-0 flex flex-col max-h-[calc(100vh-280px)]">
@@ -57,7 +64,9 @@ function BoardColumn({
         {jobs.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-8">No jobs</p>
         ) : (
-          jobs.map((j) => <JobBoardCard key={j.id} job={j} />)
+          jobs.map((j) => (
+            <JobBoardCard key={j.id} job={j} onAssign={onAssign} onReassign={onReassign} />
+          ))
         )}
       </div>
     </div>
@@ -66,11 +75,19 @@ function BoardColumn({
 
 export function JobsPage() {
   const { user } = useAuth();
+  const dept = useOptionalDepartment();
   if (user?.role === 'Inspector') return <InspectorJobsView />;
+  // Staff must work inside a department route
+  if (!dept?.department) {
+    const code = lastDeptCode() || 'LIFT';
+    return <Navigate to={`/d/${code}/jobs`} replace />;
+  }
   return <StaffJobsBoard />;
 }
 
 function StaffJobsBoard() {
+  const dept = useOptionalDepartment();
+  const department = dept?.department;
   const [data, setData] = useState<Awaited<ReturnType<typeof api.jobsBoard>> | null>(null);
   const [mapData, setMapData] = useState<MapData | null>(null);
   const [error, setError] = useState('');
@@ -78,21 +95,27 @@ function StaffJobsBoard() {
   const [filter, setFilter] = useState<JobStageId>('all');
   const [view, setView] = useState<ViewMode>('board');
   const [search, setSearch] = useState('');
+  const [assignJob, setAssignJob] = useState<Job | null>(null);
 
-  const load = () => {
+  const load = async () => {
     api
-      .jobsBoard()
-      .then(setData)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load jobs'));
-    api
-      .map()
+      .map(department ? { departmentId: department.id } : undefined)
       .then(setMapData)
       .catch((err) => setMapError(err instanceof Error ? err.message : 'Could not load map'));
+    try {
+      const board = await api.jobsBoard();
+      setData(board);
+      setError('');
+      return board.all;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load jobs');
+      return [] as Job[];
+    }
   };
 
   useEffect(() => {
     load();
-  }, []);
+  }, [department?.id]);
 
   useEffect(() => {
     if (window.location.hash === '#map') {
@@ -104,12 +127,14 @@ function StaffJobsBoard() {
 
   const allJobs = useMemo(() => {
     if (!data) return [];
-    return [
+    const merged = [
       ...data.columns.new,
       ...data.columns.active,
       ...data.columns.completed,
     ].filter((job, i, arr) => arr.findIndex((j) => j.id === job.id) === i);
-  }, [data]);
+    if (!department) return merged;
+    return merged.filter((j) => j.department.id === department.id || j.department.code === department.code);
+  }, [data, department]);
 
   const filteredJobs = useMemo(() => {
     let jobs = allJobs;
@@ -119,6 +144,17 @@ function StaffJobsBoard() {
     if (search.trim()) jobs = jobs.filter((j) => matchesSearch(j, search));
     return jobs.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
   }, [allJobs, filter, search]);
+
+  const scopedCounts = useMemo(() => {
+    const base = { total: allJobs.length, new: 0, active: 0, completed: 0 };
+    for (const j of allJobs) {
+      const s = stageForJob(j);
+      if (s === 'new') base.new += 1;
+      if (s === 'active') base.active += 1;
+      if (s === 'completed') base.completed += 1;
+    }
+    return base;
+  }, [allJobs]);
 
   const jobsByColumn = useMemo(() => {
     const map = Object.fromEntries(JOB_STAGES.map((s) => [s.id, [] as Job[]])) as Record<
@@ -155,7 +191,22 @@ function StaffJobsBoard() {
     );
   }
 
-  const counts = data.counts;
+  const counts = scopedCounts;
+
+  const mapPanel = (
+    <JobsMapPanel
+      data={mapData}
+      error={mapError}
+      filter={filter}
+      onFilterChange={setFilter}
+      compact
+      fillHeight
+      showPopout
+      departmentId={department?.id}
+      deptCode={department?.code}
+      className="h-full"
+    />
+  );
 
   return (
     <div className="space-y-6">
@@ -171,9 +222,7 @@ function StaffJobsBoard() {
           <StatChip
             key={stage.id}
             label={stage.label}
-            count={
-              (counts[stage.id as keyof typeof counts] as number | undefined) ?? 0
-            }
+            count={counts[stage.id]}
             active={filter === stage.id}
             chipClass={stage.chip}
             onClick={() => setFilter(stage.id)}
@@ -181,72 +230,96 @@ function StaffJobsBoard() {
         ))}
       </div>
 
-      <JobsMapPanel
-        data={mapData}
-        error={mapError}
-        filter={filter}
-        onFilterChange={setFilter}
-      />
-
-      <div className="card p-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <input
-          type="search"
-          className="input max-w-md"
-          placeholder="Search ref, title, client, inspector…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <div className="flex gap-2 shrink-0">
-          <div className="inline-flex rounded-lg border border-slate-200 p-1 bg-slate-50">
-            <button
-              type="button"
-              className={`px-3 py-1.5 text-sm rounded-md ${view === 'board' ? 'bg-white shadow-sm font-medium text-navy' : 'text-slate-500'}`}
-              onClick={() => setView('board')}
-            >
-              Board
-            </button>
-            <button
-              type="button"
-              className={`px-3 py-1.5 text-sm rounded-md ${view === 'list' ? 'bg-white shadow-sm font-medium text-navy' : 'text-slate-500'}`}
-              onClick={() => setView('list')}
-            >
-              List
-            </button>
-          </div>
+      {/* Below xl: map stacks above board. xl+: board left, sticky map right. */}
+      <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-4 xl:items-start">
+        <div className="order-1 xl:order-2 xl:sticky xl:top-4 xl:h-[calc(100vh-6rem)] mb-4 xl:mb-0 min-h-[360px] xl:min-h-0">
+          {mapPanel}
         </div>
-      </div>
 
-      {view === 'board' ? (
-        <div className="flex gap-4 overflow-x-auto pb-4 -mx-1 px-1">
-          {JOB_STAGES.map((stage) => (
-            <BoardColumn
-              key={stage.id}
-              stage={stage}
-              jobs={filter === 'all' || filter === stage.id ? jobsByColumn[stage.id] : []}
+        <div className="order-2 xl:order-1 space-y-4 min-w-0">
+          <div className="card p-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+            <input
+              type="search"
+              className="input max-w-md"
+              placeholder="Search ref, title, client, inspector…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
-          ))}
-        </div>
-      ) : (
-        <div className="card overflow-hidden">
-          <div className="hidden md:grid grid-cols-[minmax(100px,1fr)_2fr_1fr_1fr_1fr_auto] gap-4 px-4 py-3 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500 border-b border-slate-200">
-            <span>Ref</span>
-            <span>Job</span>
-            <span>Type</span>
-            <span>Inspector</span>
-            <span>Dates</span>
-            <span>Status</span>
+            <div className="flex gap-2 shrink-0">
+              <div className="inline-flex rounded-lg border border-slate-200 p-1 bg-slate-50">
+                <button
+                  type="button"
+                  className={`px-3 py-1.5 text-sm rounded-md ${view === 'board' ? 'bg-white shadow-sm font-medium text-navy' : 'text-slate-500'}`}
+                  onClick={() => setView('board')}
+                >
+                  Board
+                </button>
+                <button
+                  type="button"
+                  className={`px-3 py-1.5 text-sm rounded-md ${view === 'list' ? 'bg-white shadow-sm font-medium text-navy' : 'text-slate-500'}`}
+                  onClick={() => setView('list')}
+                >
+                  List
+                </button>
+              </div>
+            </div>
           </div>
-          {filteredJobs.length === 0 ? (
-            <p className="text-sm text-slate-500 p-8 text-center">No jobs match your filters.</p>
+
+          {view === 'board' ? (
+            <div className="flex gap-4 overflow-x-auto pb-4 -mx-1 px-1">
+              {JOB_STAGES.map((stage) => (
+                <BoardColumn
+                  key={stage.id}
+                  stage={stage}
+                  jobs={filter === 'all' || filter === stage.id ? jobsByColumn[stage.id] : []}
+                  onAssign={setAssignJob}
+                  onReassign={setAssignJob}
+                />
+              ))}
+            </div>
           ) : (
-            filteredJobs.map((j) => <JobListRow key={j.id} job={j} />)
+            <div className="card overflow-hidden">
+              <div className="hidden md:grid grid-cols-[minmax(100px,1fr)_2fr_1fr_1fr_1fr_auto] gap-4 px-4 py-3 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                <span>Ref</span>
+                <span>Job</span>
+                <span>Type</span>
+                <span>Inspector</span>
+                <span>Dates</span>
+                <span>Status</span>
+              </div>
+              {filteredJobs.length === 0 ? (
+                <p className="text-sm text-slate-500 p-8 text-center">No jobs match your filters.</p>
+              ) : (
+                filteredJobs.map((j) => <JobListRow key={j.id} job={j} />)
+              )}
+            </div>
           )}
         </div>
-      )}
+      </div>
 
       <section id="timesheet" className="pt-2 border-t border-slate-200">
         <TimesheetGenerator compact showHistory />
       </section>
+
+      {assignJob && (
+        <AssignInspectorModal
+          job={assignJob}
+          open
+          onClose={() => setAssignJob(null)}
+          onAssigned={async () => {
+            const all = await load();
+            const next = all.find((j) => j.id === assignJob.id);
+            if (next) setAssignJob(next);
+            else {
+              try {
+                setAssignJob(await api.job(assignJob.id));
+              } catch {
+                setAssignJob(null);
+              }
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

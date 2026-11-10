@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { STAFF_ROLES } from '../services/authz.js';
@@ -17,20 +18,39 @@ function stageForStatus(status: string): MapStage | null {
   return null;
 }
 
-router.get('/', async (_req, res) => {
+function parseDepartmentId(query: { departmentId?: string }) {
+  if (!query.departmentId) return undefined;
+  const id = Number(query.departmentId);
+  return Number.isFinite(id) ? id : undefined;
+}
+
+router.get('/', async (req, res) => {
+  const departmentId = parseDepartmentId(req.query as { departmentId?: string });
+  const jobWhere: Prisma.JobWhereInput = {
+    status: { notIn: ['Cancelled'] },
+    ...(departmentId ? { departmentId } : {}),
+  };
+
   const [clients, jobs] = await Promise.all([
     prisma.client.findMany({
       include: {
         jobs: {
-          where: { status: { notIn: ['Cancelled'] } },
+          where: jobWhere,
           select: { id: true, status: true },
         },
       },
       orderBy: { name: 'asc' },
     }),
     prisma.job.findMany({
-      where: { status: { notIn: ['Cancelled'] } },
-      include: { client: true },
+      where: jobWhere,
+      include: {
+        client: true,
+        assignments: {
+          where: { status: { in: ['Accepted', 'Active', 'PendingAcceptance', 'Proposed'] } },
+          include: { inspector: { select: { id: true, name: true, employeeNo: true } } },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
       orderBy: { startDate: 'desc' },
     }),
   ]);
@@ -52,8 +72,14 @@ router.get('/', async (_req, res) => {
         location: j.location ?? j.client.location,
         clientId: j.clientId,
         clientName: j.client.name,
+        departmentId: j.departmentId,
         latitude,
         longitude,
+        inspectors: j.assignments.map((a) => ({
+          id: a.inspector.id,
+          name: a.inspector.name,
+          employeeNo: a.inspector.employeeNo,
+        })),
       };
     })
     .filter((j): j is NonNullable<typeof j> => j != null);
@@ -71,6 +97,9 @@ router.get('/', async (_req, res) => {
         if (stage) counts[stage] += 1;
       }
       const openJobCount = counts.new + counts.active;
+      // When scoped to a department, only show clients that have jobs in that dept
+      if (departmentId && openJobCount + counts.completed === 0) return null;
+
       const primaryStage: MapStage | null =
         counts.active > 0 ? 'active' : counts.new > 0 ? 'new' : counts.completed > 0 ? 'completed' : null;
 

@@ -34,8 +34,8 @@ Do **not** run `git reset --hard` on a shared branch unless you explicitly want 
 
 ### What comes next (not in this stable)
 
-- **CM-018** — Department-centric navigation; job types per department; cross-dept assign with amber “loaned/borrowed” markers
+- **CM-018** — Department-centric navigation; job types per department; cross-dept assign with amber “loaned/borrowed” markers *(Phase 1 in progress on branch after this tag)*
 
 ---
 
-*Last updated: 2026-11-04*
+*Last updated: 2026-11-05*

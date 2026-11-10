@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type Certification, type JobType, type PriceChartData } from '../lib/api';
 import { CURRENCY_CODE, formatMoney } from '../lib/money';
+import { useDepartment } from '../context/DepartmentContext';
 
 type JobTypeForm = {
   code: string;
@@ -133,6 +134,7 @@ function JobTypeEditor({
 }
 
 export function JobTypesPage() {
+  const { department, loading: deptLoading } = useDepartment();
   const [types, setTypes] = useState<JobType[]>([]);
   const [certs, setCerts] = useState<Certification[]>([]);
   const [chart, setChart] = useState<PriceChartData | null>(null);
@@ -158,8 +160,13 @@ export function JobTypesPage() {
   const [savingQual, setSavingQual] = useState(false);
   const [showAddQual, setShowAddQual] = useState(false);
 
-  const load = () =>
-    Promise.all([api.jobTypesAll(), api.priceChart(), api.certifications()]).then(([t, c, q]) => {
+  const load = () => {
+    if (!department) return Promise.resolve();
+    return Promise.all([
+      api.jobTypesAll({ departmentId: department.id }),
+      api.priceChart({ departmentId: department.id }),
+      api.certifications(),
+    ]).then(([t, c, q]) => {
       setTypes(t);
       setChart(c);
       setCerts(q);
@@ -168,10 +175,11 @@ export function JobTypesPage() {
         Object.fromEntries(c.items.map((i) => [i.jobTypeId, i.priceUsd != null ? String(i.priceUsd) : '']))
       );
     });
+  };
 
   useEffect(() => {
     load().catch(() => undefined);
-  }, []);
+  }, [department?.id]);
 
   const startEdit = (type: JobType) => {
     setEditingId(type.id);
@@ -196,6 +204,7 @@ export function JobTypesPage() {
   };
 
   const payloadFrom = (form: JobTypeForm) => ({
+    departmentId: department!.id,
     code: form.code.trim(),
     name: form.name.trim(),
     description: form.description.trim() || undefined,
@@ -204,6 +213,7 @@ export function JobTypesPage() {
   });
 
   const createType = async () => {
+    if (!department) return;
     setCreateError('');
     setCreating(true);
     try {
@@ -270,13 +280,17 @@ export function JobTypesPage() {
     }
   };
 
+  if (deptLoading || !department) {
+    return <p className="text-sm text-slate-500">Loading department…</p>;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-navy">Job types & qualifications</h1>
+          <h1 className="text-2xl font-bold text-navy">Job types · {department.name}</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Define inspection categories and required certifications. Prices live in the chart on the right.
+            Categories and certifications for this department. Price chart on the right is scoped here.
           </p>
         </div>
         <button

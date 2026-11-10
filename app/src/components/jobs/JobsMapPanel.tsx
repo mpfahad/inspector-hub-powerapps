@@ -7,6 +7,7 @@ import type { JobStageId } from '../../lib/jobs';
 
 const QATAR_CENTER: [number, number] = [25.3, 51.5];
 const QATAR_ZOOM = 8;
+const POPOUT_NAME = 'irppms-jobs-map';
 
 /** Map / stage colour standard: New = blue, Active = green (live), Completed = muted gray (stale). */
 const STAGE_STYLE: Record<
@@ -30,14 +31,55 @@ function matchesFilter(stage: MapStage, filter: JobStageId) {
   return filter === 'all' || filter === stage;
 }
 
+function jobHref(jobId: number, deptCode?: string) {
+  return deptCode ? `/d/${deptCode}/jobs/${jobId}` : `/jobs/${jobId}`;
+}
+
+export function openJobsMapPopout(opts: {
+  filter: JobStageId;
+  departmentId?: number;
+  deptCode?: string;
+}) {
+  const q = new URLSearchParams();
+  if (opts.filter && opts.filter !== 'all') q.set('filter', opts.filter);
+  if (opts.departmentId) q.set('departmentId', String(opts.departmentId));
+  if (opts.deptCode) q.set('deptCode', opts.deptCode);
+  const qs = q.toString();
+  const url = `/map/popout${qs ? `?${qs}` : ''}`;
+  const features = 'width=960,height=720,menubar=no,toolbar=no,location=yes,status=no,resizable=yes,scrollbars=yes';
+  const win = window.open(url, POPOUT_NAME, features);
+  win?.focus();
+  return win;
+}
+
 type Props = {
   data: MapData | null;
   error?: string;
   filter: JobStageId;
   onFilterChange: (filter: JobStageId) => void;
+  /** Tighter chrome for the jobs-board sidebar. */
+  compact?: boolean;
+  /** Stretch map to fill parent height (sticky side panel / popout). */
+  fillHeight?: boolean;
+  /** Show Pop out control (hidden inside the popup itself). */
+  showPopout?: boolean;
+  departmentId?: number;
+  deptCode?: string;
+  className?: string;
 };
 
-export function JobsMapPanel({ data, error, filter, onFilterChange }: Props) {
+export function JobsMapPanel({
+  data,
+  error,
+  filter,
+  onFilterChange,
+  compact = false,
+  fillHeight = false,
+  showPopout = true,
+  departmentId,
+  deptCode,
+  className = '',
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -74,10 +116,12 @@ export function JobsMapPanel({ data, error, filter, onFilterChange }: Props) {
 
     const onResize = () => map.invalidateSize();
     window.addEventListener('resize', onResize);
-    // Leaflet needs a tick after layout
     requestAnimationFrame(() => map.invalidateSize());
+    // Second pass after sticky/flex layout settles
+    const t = window.setTimeout(() => map.invalidateSize(), 120);
 
     return () => {
+      window.clearTimeout(t);
       window.removeEventListener('resize', onResize);
       map.remove();
       mapRef.current = null;
@@ -101,7 +145,7 @@ export function JobsMapPanel({ data, error, filter, onFilterChange }: Props) {
           ? filter
           : client.primaryStage ?? 'new';
       const style = STAGE_STYLE[primary];
-        const tagBits = [
+      const tagBits = [
         client.counts.active ? `<span style="color:#059669">${client.counts.active} active</span>` : null,
         client.counts.new ? `<span style="color:#2563eb">${client.counts.new} new</span>` : null,
         client.counts.completed ? `<span style="color:#94a3b8">${client.counts.completed} done</span>` : null,
@@ -111,7 +155,7 @@ export function JobsMapPanel({ data, error, filter, onFilterChange }: Props) {
 
       points.push([client.latitude, client.longitude]);
       L.circleMarker([client.latitude, client.longitude], {
-        radius: 11,
+        radius: compact ? 9 : 11,
         color: style.color,
         fillColor: style.color,
         fillOpacity: 0.9,
@@ -126,7 +170,6 @@ export function JobsMapPanel({ data, error, filter, onFilterChange }: Props) {
         .addTo(layer);
     }
 
-    // Slight offset so job dots sit near (not under) client markers when colocated
     const offsetByClient = new Map<number, number>();
     for (const job of visibleJobs) {
       const n = offsetByClient.get(job.clientId) ?? 0;
@@ -135,48 +178,89 @@ export function JobsMapPanel({ data, error, filter, onFilterChange }: Props) {
       const lat = job.latitude + Math.cos(angle) * 0.012;
       const lng = job.longitude + Math.sin(angle) * 0.012;
       const style = STAGE_STYLE[job.stage];
+      const href = jobHref(job.id, deptCode);
+      const inspectors = job.inspectors ?? [];
+      const inspectorLine =
+        inspectors.length === 0
+          ? `<div style="margin-top:6px;font-size:11px;color:#94a3b8">Unassigned</div>`
+          : `<div style="margin-top:6px;font-size:11px;color:#334155"><span style="color:#64748b">Inspector${
+              inspectors.length === 1 ? '' : 's'
+            }:</span> ${inspectors.map((i) => escapeHtml(i.name)).join(', ')}</div>`;
       points.push([lat, lng]);
       L.circleMarker([lat, lng], {
-        radius: 6,
+        radius: compact ? 5 : 6,
         color: '#fff',
         fillColor: style.color,
         fillOpacity: 1,
         weight: 2,
       })
         .bindPopup(
-          `<strong><a href="/jobs/${job.id}">${escapeHtml(job.ref)}</a></strong> — ${escapeHtml(job.title)}<br/>` +
-            `${escapeHtml(job.clientName)}<br/>` +
-            `<span style="color:${style.color}">${style.label}</span> · ${escapeHtml(job.status)}`
+          `<div style="min-width:180px;max-width:260px">` +
+            `<div style="font-weight:600;color:#1e3a5f;font-size:13px">${escapeHtml(job.ref)}</div>` +
+            `<div style="font-size:12px;margin-top:2px">${escapeHtml(job.title)}</div>` +
+            `<div style="font-size:11px;color:#64748b;margin-top:4px">${escapeHtml(job.clientName)}</div>` +
+            `<div style="margin-top:6px;font-size:11px"><span style="color:${style.color};font-weight:600">${style.label}</span></div>` +
+            inspectorLine +
+            `<div style="margin-top:10px">` +
+            `<a href="${href}" style="display:inline-block;padding:4px 10px;border-radius:6px;background:#0d9488;color:#fff;font-size:11px;font-weight:600;text-decoration:none">Open job</a>` +
+            `</div></div>`
         )
         .addTo(layer);
     }
 
     if (points.length > 1) {
-      map.fitBounds(L.latLngBounds(points), { padding: [36, 36], maxZoom: 10 });
+      map.fitBounds(L.latLngBounds(points), { padding: [compact ? 24 : 36, compact ? 24 : 36], maxZoom: 10 });
     } else if (points.length === 1) {
       map.setView(points[0], 9);
     } else {
       map.setView(QATAR_CENTER, QATAR_ZOOM);
     }
     requestAnimationFrame(() => map.invalidateSize());
-  }, [data, visibleClients, visibleJobs, filter]);
+  }, [data, visibleClients, visibleJobs, filter, compact, deptCode]);
+
+  const mapHeightClass = fillHeight
+    ? 'flex-1 min-h-[240px] h-full'
+    : compact
+      ? 'h-[280px]'
+      : 'h-[360px] md:h-[420px]';
 
   return (
-    <section id="map" className="card overflow-hidden">
-      <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-navy">Jobs map</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Large dots = client sites (tagged by job mix). Small dots = individual jobs. Scroll to zoom.
-          </p>
+    <section
+      id="map"
+      className={`card overflow-hidden ${fillHeight ? 'h-full flex flex-col' : ''} ${className}`}
+    >
+      <div
+        className={`border-b border-slate-100 flex flex-col gap-2 ${
+          compact ? 'p-3' : 'p-4 lg:flex-row lg:items-center lg:justify-between gap-3'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-2 min-w-0">
+          <div className="min-w-0">
+            <h2 className={`font-semibold text-navy ${compact ? 'text-sm' : 'text-base'}`}>Jobs map</h2>
+            {!compact && (
+              <p className="text-xs text-slate-500 mt-0.5">
+                Large dots = client sites. Small dots = jobs. Scroll to zoom.
+              </p>
+            )}
+          </div>
+          {showPopout && (
+            <button
+              type="button"
+              className="btn-secondary text-xs shrink-0 px-2.5 py-1.5"
+              title="Open map in a separate window"
+              onClick={() => openJobsMapPopout({ filter, departmentId, deptCode })}
+            >
+              Pop out
+            </button>
+          )}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className={`flex flex-wrap gap-1.5 ${compact ? '' : 'gap-2'}`}>
           {(
             [
               { id: 'all' as const, label: 'All', count: summary.new + summary.active + summary.completed },
               { id: 'new' as const, label: 'New', count: summary.new },
               { id: 'active' as const, label: 'Active', count: summary.active },
-              { id: 'completed' as const, label: 'Completed', count: summary.completed },
+              { id: 'completed' as const, label: 'Done', count: summary.completed },
             ] as const
           ).map((opt) => {
             const active = filter === opt.id;
@@ -187,29 +271,31 @@ export function JobsMapPanel({ data, error, filter, onFilterChange }: Props) {
                 key={opt.id}
                 type="button"
                 onClick={() => onFilterChange(opt.id)}
-                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-lg border transition-colors ${
+                  compact ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm gap-2'
+                } ${
                   active ? 'border-teal bg-teal/5 font-medium text-navy' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                 }`}
               >
                 <span
-                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  className="inline-block h-2 w-2 rounded-full shrink-0"
                   style={{ backgroundColor: color }}
                   aria-hidden
                 />
                 {opt.label}
-                <span className="text-xs text-slate-400">{opt.count}</span>
+                <span className="text-[10px] text-slate-400">{opt.count}</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {error && <p className="px-4 py-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="px-3 py-2 text-sm text-red-600">{error}</p>}
 
-      <div className="relative">
+      <div className={`relative ${fillHeight ? 'flex-1 min-h-0' : ''}`}>
         <div
           ref={containerRef}
-          className="h-[360px] md:h-[420px] w-full bg-slate-100"
+          className={`${mapHeightClass} w-full bg-slate-100`}
         />
         {!data && !error && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-50/80 text-sm text-slate-500">
@@ -218,32 +304,30 @@ export function JobsMapPanel({ data, error, filter, onFilterChange }: Props) {
         )}
       </div>
 
-      <div className="px-4 py-3 border-t border-slate-100 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-500">
-        <span className="inline-flex items-center gap-1.5 font-medium text-slate-600">Size:</span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-full bg-slate-400" />
-          Large = client site
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-slate-400 ring-2 ring-white" />
-          Small = job
-        </span>
-        <span className="inline-flex items-center gap-1.5 font-medium text-slate-600 ml-2">Colour:</span>
+      <div
+        className={`border-t border-slate-100 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 ${
+          compact ? 'px-3 py-2' : 'px-4 py-3 gap-x-5 gap-y-2 text-xs'
+        }`}
+      >
         {(Object.keys(STAGE_STYLE) as MapStage[]).map((stage) => (
           <span key={stage} className="inline-flex items-center gap-1.5">
             <span
-              className="inline-block h-2.5 w-2.5 rounded-full"
+              className="inline-block h-2 w-2 rounded-full"
               style={{ backgroundColor: STAGE_STYLE[stage].color }}
             />
-            <span className={`badge ${STAGE_STYLE[stage].chip}`}>{STAGE_STYLE[stage].label}</span>
+            {STAGE_STYLE[stage].label}
           </span>
         ))}
-        <span className="ml-auto">
-          Showing {visibleJobs.length} job{visibleJobs.length === 1 ? '' : 's'}
-          {filter !== 'all' ? ` (${filter})` : ''} ·{' '}
-          <Link to="/clients" className="text-teal hover:underline">
-            Clients
-          </Link>
+        <span className="ml-auto truncate">
+          {visibleJobs.length} job{visibleJobs.length === 1 ? '' : 's'}
+          {!compact && (
+            <>
+              {' · '}
+              <Link to="/clients" className="text-teal hover:underline">
+                Clients
+              </Link>
+            </>
+          )}
         </span>
       </div>
     </section>

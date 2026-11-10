@@ -31,18 +31,51 @@ export type JobStageId = (typeof JOB_STAGES)[number]['id'] | 'all';
 
 const OPEN_ASSIGNMENT_STATUSES = ['PendingAcceptance', 'Accepted', 'Active', 'Proposed'];
 
+export function openAssignments(job: Job) {
+  return (job.assignments ?? []).filter((a) => OPEN_ASSIGNMENT_STATUSES.includes(a.status));
+}
+
 export function currentAssignment(job: Job) {
-  return job.assignments?.find((a) => OPEN_ASSIGNMENT_STATUSES.includes(a.status));
+  return openAssignments(job)[0];
+}
+
+export function requiredTeamSize(job: Job): number {
+  return job.requiredInspectorCount && job.requiredInspectorCount > 0 ? job.requiredInspectorCount : 1;
+}
+
+export function teamFillLabel(job: Job): string | null {
+  const open = openAssignments(job);
+  if (open.length === 0) return null;
+  const need = requiredTeamSize(job);
+  if (open.length === 1 && need <= 1) return open[0].inspector.name;
+  const names = open.map((a) => a.inspector.name).join(', ');
+  return `${open.length}/${need}: ${names}`;
 }
 
 export function assignmentLabel(job: Job): string | null {
-  const a = currentAssignment(job);
-  if (!a) return null;
-  return a.inspector.name;
+  return teamFillLabel(job);
+}
+
+/** Assignee belongs to a different department than the job (CM-018 cross-dept loan). */
+export function isCrossDeptAssignment(job: Job): boolean {
+  return openAssignments(job).some(
+    (a) => a.inspector?.department && a.inspector.department.id !== job.department.id
+  );
+}
+
+export function crossDeptLabel(job: Job): string | null {
+  const loans = openAssignments(job).filter(
+    (a) => a.inspector?.department && a.inspector.department.id !== job.department.id
+  );
+  if (loans.length === 0) return null;
+  if (loans.length === 1) {
+    return `Borrowed from ${loans[0].inspector.department.name}`;
+  }
+  return `${loans.length} borrowed from other depts`;
 }
 
 export function hasOpenAssignment(job: Job): boolean {
-  return !!currentAssignment(job);
+  return openAssignments(job).length > 0;
 }
 
 export function isUnassignedJob(job: Job): boolean {

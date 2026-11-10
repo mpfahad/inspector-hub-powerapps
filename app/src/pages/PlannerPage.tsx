@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type PlannerAllocation, type PlannerData } from '../lib/api';
+import { useDepartment } from '../context/DepartmentContext';
 import {
   addDays,
   BAND_STYLES,
@@ -55,11 +56,13 @@ function AllocationBar({
   span,
   offset,
   total,
+  deptPath,
 }: {
   allocation: PlannerAllocation;
   span: number;
   offset: number;
   total: number;
+  deptPath: (suffix?: string) => string;
 }) {
   const icon = allocation.kind === 'leave' ? '✈' : allocation.kind === 'training' ? '🎓' : '📋';
   const className = `absolute top-1.5 bottom-1.5 rounded-md text-[11px] font-medium px-2 flex items-center gap-1 shadow-sm border truncate ${KIND_STYLES[allocation.kind]}`;
@@ -71,7 +74,7 @@ function AllocationBar({
 
   if (allocation.kind === 'job' && allocation.jobId) {
     return (
-      <Link to={`/jobs/${allocation.jobId}`} className={className} style={style} title={title}>
+      <Link to={deptPath(`jobs/${allocation.jobId}`)} className={className} style={style} title={title}>
         <span className="shrink-0">{icon}</span>
         <span className="truncate">{allocation.ref ?? allocation.title}</span>
       </Link>
@@ -86,7 +89,7 @@ function AllocationBar({
   );
 }
 
-function TimelineGrid({ data }: { data: PlannerData }) {
+function TimelineGrid({ data, deptPath }: { data: PlannerData; deptPath: (suffix?: string) => string }) {
   const isoList = data.days;
 
   return (
@@ -128,7 +131,7 @@ function TimelineGrid({ data }: { data: PlannerData }) {
                   <div className="px-4 py-3 border-r border-slate-200 flex items-center gap-2.5">
                     <InspectorAvatar name={row.name} />
                     <div className="min-w-0">
-                      <Link to={`/inspectors/${row.id}`} className="text-xs font-medium text-navy hover:text-teal truncate block">
+                      <Link to={deptPath(`inspectors/${row.id}`)} className="text-xs font-medium text-navy hover:text-teal truncate block">
                         {row.name}
                       </Link>
                       <div className="text-[10px] text-slate-500">
@@ -159,6 +162,7 @@ function TimelineGrid({ data }: { data: PlannerData }) {
                           offset={offset}
                           span={span}
                           total={data.days.length}
+                          deptPath={deptPath}
                         />
                       );
                     })}
@@ -174,15 +178,16 @@ function TimelineGrid({ data }: { data: PlannerData }) {
 }
 
 export function PlannerPage() {
+  const { department: dept, deptPath } = useDepartment();
   const [view, setView] = useState<ViewMode>('week');
   const [anchor, setAnchor] = useState<string | undefined>(undefined);
-  const [department, setDepartment] = useState('All');
   const [data, setData] = useState<PlannerData | null>(null);
   const [conflictsOpen, setConflictsOpen] = useState(false);
 
   useEffect(() => {
-    api.planner({ weekStart: anchor, view, department: department === 'All' ? undefined : department }).then(setData);
-  }, [anchor, view, department]);
+    if (!dept) return;
+    api.planner({ weekStart: anchor, view, department: dept.name }).then(setData);
+  }, [anchor, view, dept?.id, dept?.name]);
 
   const step = VIEW_STEP[view];
 
@@ -195,6 +200,7 @@ export function PlannerPage() {
 
   const dayCount = data?.days.length ?? 7;
 
+  if (!dept) return <p className="text-slate-500">Loading department…</p>;
   if (!data) return <p className="text-slate-500">Loading resource planner…</p>;
 
   return (
@@ -202,9 +208,10 @@ export function PlannerPage() {
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-teal mb-1">Planning</p>
-          <h1 className="text-2xl font-bold text-navy">Resource Planner</h1>
+          <h1 className="text-2xl font-bold text-navy">Resource Planner · {dept.name}</h1>
           <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-            Capacity, allocations, and conflicts across every inspector. Color bands show daily utilization; bars span job and leave windows.
+            Capacity and allocations for this department’s inspectors. Cross-dept jobs still appear on a loaned
+            inspector’s row (utilization stays here).
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -220,15 +227,7 @@ export function PlannerPage() {
               </button>
             ))}
           </div>
-          <select
-            className="input h-9 w-44 text-xs"
-            value={department}
-            onChange={(e) => setDepartment(e.target.value)}
-          >
-            {data.departments.map((d) => (
-              <option key={d} value={d}>{d === 'All' ? 'All departments' : d}</option>
-            ))}
-          </select>
+          <span className="badge bg-slate-100 text-slate-600 h-9 inline-flex items-center px-3">{dept.code}</span>
         </div>
       </div>
 
@@ -281,7 +280,7 @@ export function PlannerPage() {
         </div>
       </div>
 
-      <TimelineGrid data={data} />
+      <TimelineGrid data={data} deptPath={deptPath} />
 
       {conflictsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setConflictsOpen(false)}>
@@ -302,7 +301,7 @@ export function PlannerPage() {
                       <span className={`badge border ${conflictClass(c.type)}`}>{conflictLabel(c.type)}</span>
                     </div>
                     <p className="text-xs text-slate-600 mt-1">{c.detail}</p>
-                    <Link to={`/inspectors/${c.inspectorId}`} className="text-xs text-teal hover:underline mt-2 inline-block">
+                    <Link to={deptPath(`inspectors/${c.inspectorId}`)} className="text-xs text-teal hover:underline mt-2 inline-block">
                       View inspector →
                     </Link>
                   </div>

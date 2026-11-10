@@ -52,10 +52,12 @@ function eachDateInclusive(from: string, to: string): string[] {
   return out;
 }
 
-function productiveFromHours(hours: string) {
+function productiveFromHours(hours: string, qualityPct = '90') {
   const n = Number(hours);
+  const q = Number(qualityPct);
   if (!Number.isFinite(n) || n <= 0) return '0';
-  return (Math.round(n * 0.9 * 10) / 10).toString();
+  const pct = Number.isFinite(q) ? Math.min(100, Math.max(0, q)) / 100 : 0.9;
+  return (Math.round(n * pct * 10) / 10).toString();
 }
 
 export function ActivityLogPanel({
@@ -110,7 +112,7 @@ export function ActivityLogPanel({
         return {
           logDate,
           hours: alreadyLogged ? '0' : hours,
-          productiveHours: alreadyLogged ? '0' : productiveFromHours(hours),
+          productiveHours: alreadyLogged ? '0' : productiveFromHours(hours, quality),
           qualityScore: quality,
           include: !alreadyLogged,
           alreadyLogged,
@@ -128,7 +130,7 @@ export function ActivityLogPanel({
           return {
             logDate,
             hours: alreadyLogged ? '0' : defaultHours,
-            productiveHours: alreadyLogged ? '0' : productiveFromHours(defaultHours),
+            productiveHours: alreadyLogged ? '0' : productiveFromHours(defaultHours, defaultQuality),
             qualityScore: defaultQuality,
             include: !alreadyLogged,
             alreadyLogged,
@@ -149,6 +151,23 @@ export function ActivityLogPanel({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, loggedKeys]);
+
+  // Keep day-list hours/quality in sync when defaults change (skip already-logged days)
+  useEffect(() => {
+    if (mode !== 'multi') return;
+    setRows((prev) => {
+      if (prev.length === 0) return prev;
+      return prev.map((r) => {
+        if (r.alreadyLogged) return r;
+        return {
+          ...r,
+          hours: defaultHours,
+          qualityScore: defaultQuality,
+          productiveHours: productiveFromHours(defaultHours, defaultQuality),
+        };
+      });
+    });
+  }, [defaultHours, defaultQuality, mode]);
 
   const includedRows = rows.filter((r) => r.include && !r.alreadyLogged && Number(r.hours) > 0);
   const multiTotalHours = includedRows.reduce((s, r) => s + (Number(r.hours) || 0), 0);
@@ -259,8 +278,8 @@ export function ActivityLogPanel({
       prev.map((r) => {
         if (r.logDate !== logDate) return r;
         const next = { ...r, ...patch };
-        if (patch.hours != null && patch.productiveHours === undefined) {
-          next.productiveHours = productiveFromHours(patch.hours);
+        if (patch.productiveHours === undefined && (patch.hours != null || patch.qualityScore != null)) {
+          next.productiveHours = productiveFromHours(next.hours, next.qualityScore);
         }
         return next;
       })
@@ -435,7 +454,7 @@ export function ActivityLogPanel({
           <button
             type="button"
             className="btn-secondary text-sm"
-            onClick={() => buildRows()}
+            onClick={() => buildRows(rangeFrom, rangeTo, defaultHours, defaultQuality)}
             disabled={rangeTooLong || !rangeFrom || !rangeTo || rangeFrom > rangeTo}
           >
             Build day list

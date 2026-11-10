@@ -21,6 +21,12 @@ function parsePeriod(query: { periodStart?: string; periodEnd?: string }) {
   return defaultReportPeriod();
 }
 
+function parseDepartmentId(query: { departmentId?: string }) {
+  if (!query.departmentId) return undefined;
+  const id = Number(query.departmentId);
+  return Number.isFinite(id) ? id : undefined;
+}
+
 async function loadOverdueAssignments() {
   return prisma.assignment.findMany({
     where: { status: { notIn: ['Cancelled'] } },
@@ -104,14 +110,23 @@ router.get('/inspector-performance', async (req, res) => {
 
 router.get('/overdue-jobs', async (req, res) => {
   const { periodStart, periodEnd } = parsePeriod(req.query as { periodStart?: string; periodEnd?: string });
+  const departmentId = parseDepartmentId(req.query as { departmentId?: string });
   const assignments = await loadOverdueAssignments();
+  let filteredAssignments = assignments;
+  if (departmentId) {
+    const dept = await prisma.department.findUnique({ where: { id: departmentId }, select: { name: true } });
+    filteredAssignments = dept
+      ? assignments.filter((a) => a.job.department?.name === dept.name)
+      : assignments;
+  }
+
   const overdueJobs = buildOverdueJobsReport({
-    assignments,
+    assignments: filteredAssignments,
     periodStart,
     periodEnd,
   });
   const trend = buildOverdueTrend({
-    assignments,
+    assignments: filteredAssignments,
     periodStart,
     periodEnd,
   });
@@ -124,16 +139,32 @@ router.get('/overdue-jobs', async (req, res) => {
 
 router.get('/summary', async (req, res) => {
   const { periodStart, periodEnd } = parsePeriod(req.query as { periodStart?: string; periodEnd?: string });
+  const departmentId = parseDepartmentId(req.query as { departmentId?: string });
+  const inspectorWhere = {
+    status: { not: 'Inactive' as const },
+    ...(departmentId ? { departmentId } : {}),
+  };
+  const activeInspectorWhere = {
+    status: 'Active' as const,
+    ...(departmentId ? { departmentId } : {}),
+  };
+  const certWhere = {
+    expiresOn: { lte: expiresOnCutoffForExpiring() },
+    ...(departmentId ? { inspector: { departmentId } } : {}),
+  };
 
-  const [operationsUtil, inspectors, assignments, activityLogs, leaveRecords, expiringCerts, overdueAssignments] =
+  const [operationsUtil, inspectors, assignments, activityLogs, leaveRecords, expiringCerts, overdueAssignments, dept] =
     await Promise.all([
-    prisma.inspector.count({ where: { status: 'Active' } }),
+    prisma.inspector.count({ where: activeInspectorWhere }),
     prisma.inspector.findMany({
-      where: { status: { not: 'Inactive' } },
+      where: inspectorWhere,
       include: { department: true },
     }),
     prisma.assignment.findMany({
-      where: { status: { notIn: ['Cancelled'] } },
+      where: {
+        status: { notIn: ['Cancelled'] },
+        ...(departmentId ? { inspector: { departmentId } } : {}),
+      },
       include: {
         job: {
           select: {
@@ -152,17 +183,22 @@ router.get('/summary', async (req, res) => {
           gte: new Date(periodStart + 'T00:00:00'),
           lte: new Date(periodEnd + 'T23:59:59'),
         },
+        ...(departmentId ? { inspector: { departmentId } } : {}),
       },
       select: { inspectorId: true, logDate: true, hours: true },
     }),
     prisma.leaveRequest.findMany({
-      where: { status: 'Approved' },
+      where: {
+        status: 'Approved',
+        ...(departmentId ? { inspector: { departmentId } } : {}),
+      },
       select: { inspectorId: true, startDate: true, endDate: true, status: true },
     }),
-    prisma.inspectorCert.count({
-      where: { expiresOn: { lte: expiresOnCutoffForExpiring() } },
-    }),
+    prisma.inspectorCert.count({ where: certWhere }),
     loadOverdueAssignments(),
+    departmentId
+      ? prisma.department.findUnique({ where: { id: departmentId }, select: { name: true } })
+      : Promise.resolve(null),
   ]);
 
   const performance = buildInspectorPerformanceReport({
@@ -173,8 +209,11 @@ router.get('/summary', async (req, res) => {
     periodStart,
     periodEnd,
   });
+  const overdueScoped = dept
+    ? overdueAssignments.filter((a) => a.job.department?.name === dept.name)
+    : overdueAssignments;
   const overdueJobs = buildOverdueJobsReport({
-    assignments: overdueAssignments,
+    assignments: overdueScoped,
     periodStart,
     periodEnd,
   });
@@ -205,15 +244,18 @@ router.get('/summary', async (req, res) => {
 
 router.get('/activity', async (req, res) => {
   const { periodStart, periodEnd } = parsePeriod(req.query as { periodStart?: string; periodEnd?: string });
+  const departmentId = parseDepartmentId(req.query as { departmentId?: string });
   const logs = await prisma.activityLog.findMany({
     where: {
       logDate: {
         gte: new Date(periodStart + 'T00:00:00'),
         lte: new Date(periodEnd + 'T23:59:59'),
       },
+      // Job commercials / activity attributed to the job's department
+      ...(departmentId ? { job: { departmentId } } : {}),
     },
     include: {
-      inspector: { select: { id: true, name: true, employeeNo: true } },
+      inspector: { select: { id: true, name: true, employeeNo: true, department: { select: { name: true } } } },
       job: {
         select: {
           id: true,
@@ -221,6 +263,7 @@ router.get('/activity', async (req, res) => {
           title: true,
           status: true,
           client: { select: { name: true } },
+          department: { select: { id: true, name: true, code: true } },
         },
       },
     },
@@ -250,10 +293,12 @@ router.get('/activity', async (req, res) => {
       inspectorId: l.inspector.id,
       inspectorName: l.inspector.name,
       employeeNo: l.inspector.employeeNo,
+      inspectorDepartment: l.inspector.department.name,
       jobId: l.job.id,
       jobRef: l.job.ref,
       jobTitle: l.job.title,
       jobStatus: l.job.status,
+      jobDepartment: l.job.department.name,
       client: l.job.client.name,
     })),
   });
@@ -268,12 +313,17 @@ function roundMoney(n: number) {
 /** Admin-only cost / margin report (CM-013). */
 router.get('/costs', requireRole('Admin'), async (req, res) => {
   const { periodStart, periodEnd } = parsePeriod(req.query as { periodStart?: string; periodEnd?: string });
+  const departmentId = parseDepartmentId(req.query as { departmentId?: string });
   const from = new Date(periodStart + 'T00:00:00');
   const to = new Date(periodEnd + 'T23:59:59');
 
   const [logs, assignments] = await Promise.all([
     prisma.activityLog.findMany({
-      where: { logDate: { gte: from, lte: to } },
+      where: {
+        logDate: { gte: from, lte: to },
+        // Job commercials attributed to the job's department
+        ...(departmentId ? { job: { departmentId } } : {}),
+      },
       include: {
         inspector: {
           select: {
@@ -292,6 +342,7 @@ router.get('/costs', requireRole('Admin'), async (req, res) => {
             status: true,
             agreedPriceUsd: true,
             client: { select: { name: true } },
+            department: { select: { id: true, name: true } },
           },
         },
       },

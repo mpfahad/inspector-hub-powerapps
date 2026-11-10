@@ -11,8 +11,9 @@ const router = Router();
 router.use(authMiddleware);
 router.use(requireRole(...STAFF_ROLES));
 
-router.get('/', async (_req, res) => {
-  res.json(await getPriceChart());
+router.get('/', async (req, res) => {
+  const departmentId = req.query.departmentId ? Number(req.query.departmentId) : undefined;
+  res.json(await getPriceChart(Number.isFinite(departmentId) ? departmentId : undefined));
 });
 
 router.put('/', validateBody(priceChartSchema), async (req, res) => {

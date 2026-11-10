@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type CompetencyData } from '../lib/api';
+import { useDepartment } from '../context/DepartmentContext';
 
 function certCellClass(status: string | null) {
   if (!status) return 'bg-slate-50 border-slate-200';
@@ -20,12 +21,15 @@ function KpiCard({ label, value, sub, accent }: { label: string; value: string |
 }
 
 export function CompetencyPage() {
+  const { department: dept, deptPath } = useDepartment();
   const [data, setData] = useState<CompetencyData | null>(null);
 
   useEffect(() => {
-    api.competency().then(setData);
-  }, []);
+    if (!dept) return;
+    api.competency({ departmentId: dept.id }).then(setData);
+  }, [dept?.id]);
 
+  if (!dept) return <p className="text-slate-500">Loading department…</p>;
   if (!data) return <p className="text-slate-500">Loading competency matrix…</p>;
 
   const { certifications, inspectors, coverage, expiringList, gaps, stats } = data;
@@ -34,9 +38,9 @@ export function CompetencyPage() {
     <div className="max-w-[1700px] mx-auto space-y-6">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-teal mb-1">People</p>
-        <h1 className="text-2xl font-bold text-navy">Competency Matrix</h1>
+        <h1 className="text-2xl font-bold text-navy">Competency Matrix · {dept.name}</h1>
         <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-          Certification coverage and expiry status across the workforce — feeds the skill-based assignment engine.
+          Certification coverage and expiry for this department’s inspectors — feeds skill-based assignment.
         </p>
       </div>
 
@@ -75,35 +79,43 @@ export function CompetencyPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {inspectors.map((ins) => {
-                const held = ins.certs.filter((c) => c.status !== 'Expired').length;
-                return (
-                  <tr key={ins.id} className="hover:bg-slate-50/50">
-                    <td className="py-2.5 px-4 sticky left-0 bg-white z-10">
-                      <Link to={`/inspectors/${ins.id}`} className="font-medium text-navy hover:text-teal text-sm">{ins.name}</Link>
-                      <div className="text-[11px] text-slate-400 font-mono">{ins.employeeNo}</div>
-                    </td>
-                    <td className="py-2.5 px-2 text-xs text-slate-500">{ins.department.replace(' Inspection', '')}</td>
-                    {certifications.map((cert) => {
-                      const heldCert = ins.certs.find((c) => c.code === cert.code);
-                      const status = heldCert?.status ?? null;
-                      const title = heldCert
-                        ? `${cert.code} · ${status} · expires ${heldCert.expiresOn}`
-                        : `${cert.code} · Not held`;
-                      return (
-                        <td key={cert.id} className="py-2 px-1 text-center" title={title}>
-                          <div className={`h-7 w-7 mx-auto rounded-md flex items-center justify-center border text-xs ${certCellClass(status)}`}>
-                            {heldCert && status !== 'Expired' ? '✓' : heldCert ? '!' : ''}
-                          </div>
-                        </td>
-                      );
-                    })}
-                    <td className="py-2.5 px-2 text-center">
-                      <span className="badge bg-teal/10 text-teal">{held}</span>
-                    </td>
-                  </tr>
-                );
-              })}
+              {inspectors.length === 0 ? (
+                <tr>
+                  <td colSpan={certifications.length + 3} className="py-8 text-center text-sm text-slate-500">
+                    No inspectors in this department.
+                  </td>
+                </tr>
+              ) : (
+                inspectors.map((ins) => {
+                  const held = ins.certs.filter((c) => c.status !== 'Expired').length;
+                  return (
+                    <tr key={ins.id} className="hover:bg-slate-50/50">
+                      <td className="py-2.5 px-4 sticky left-0 bg-white z-10">
+                        <Link to={deptPath(`inspectors/${ins.id}`)} className="font-medium text-navy hover:text-teal text-sm">{ins.name}</Link>
+                        <div className="text-[11px] text-slate-400 font-mono">{ins.employeeNo}</div>
+                      </td>
+                      <td className="py-2.5 px-2 text-xs text-slate-500">{ins.department.replace(' Inspection', '')}</td>
+                      {certifications.map((cert) => {
+                        const heldCert = ins.certs.find((c) => c.code === cert.code);
+                        const status = heldCert?.status ?? null;
+                        const title = heldCert
+                          ? `${cert.code} · ${status} · expires ${heldCert.expiresOn}`
+                          : `${cert.code} · Not held`;
+                        return (
+                          <td key={cert.id} className="py-2 px-1 text-center" title={title}>
+                            <div className={`h-7 w-7 mx-auto rounded-md flex items-center justify-center border text-xs ${certCellClass(status)}`}>
+                              {heldCert && status !== 'Expired' ? '✓' : heldCert ? '!' : ''}
+                            </div>
+                          </td>
+                        );
+                      })}
+                      <td className="py-2.5 px-2 text-center">
+                        <span className="badge bg-teal/10 text-teal">{held}</span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -166,7 +178,7 @@ export function CompetencyPage() {
       {gaps.length > 0 && (
         <div className="card p-5 border-amber-200 bg-amber-50/50">
           <h2 className="font-semibold text-navy text-sm">Certification gaps</h2>
-          <p className="text-xs text-slate-600 mt-1 mb-3">Fewer than 2 active holders — risk for skill-based assignment.</p>
+          <p className="text-xs text-slate-600 mt-1 mb-3">Fewer than 2 active holders in this department — risk for skill-based assignment.</p>
           <div className="flex flex-wrap gap-2">
             {gaps.map((g) => (
               <span key={g.code} className="text-xs px-2.5 py-1 rounded-md bg-white border border-amber-200 font-medium">

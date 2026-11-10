@@ -60,7 +60,13 @@ export const api = {
     ),
   operationsDashboard: () => request<OperationsDashboardData>('/api/dashboard/operations'),
   departmentsOverview: () => request<DepartmentOverview[]>('/api/departments/overview'),
-  competency: () => request<CompetencyData>('/api/competency'),
+  competency: (params?: { departmentId?: number; departmentCode?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.departmentId) q.set('departmentId', String(params.departmentId));
+    if (params?.departmentCode) q.set('departmentCode', params.departmentCode);
+    const qs = q.toString();
+    return request<CompetencyData>(`/api/competency${qs ? `?${qs}` : ''}`);
+  },
   inspectorDashboard: () =>
     request<{
       counts: { activeJobs: number; completedJobs: number };
@@ -74,20 +80,85 @@ export const api = {
   createJob: (data: CreateJobPayload) => request<JobDetail>('/api/jobs', { method: 'POST', body: JSON.stringify(data) }),
   submitJob: (id: number) => request(`/api/jobs/${id}/submit`, { method: 'POST' }),
   rerunJobAssessment: (id: number) => request(`/api/jobs/${id}/rerun-assessment`, { method: 'POST' }),
-  assignJob: (id: number, inspectorId: number, role?: string, agreedPriceUsd?: number | null) =>
+  assignJob: (
+    id: number,
+    inspectorId: number,
+    opts?: {
+      role?: string;
+      agreedPriceUsd?: number | null;
+      mobDate?: string;
+      demobDate?: string;
+      allowOverfill?: boolean;
+      allocatedHours?: number;
+    }
+  ) =>
     request(`/api/jobs/${id}/assign`, {
       method: 'POST',
-      body: JSON.stringify({ inspectorId, role, agreedPriceUsd }),
+      body: JSON.stringify({
+        inspectorId,
+        role: opts?.role,
+        agreedPriceUsd: opts?.agreedPriceUsd,
+        mobDate: opts?.mobDate,
+        demobDate: opts?.demobDate,
+        allowOverfill: opts?.allowOverfill,
+        allocatedHours: opts?.allocatedHours,
+      }),
     }),
-  completeJob: (id: number, inspectorId: number, comments: string, agreedPriceUsd?: number | null) =>
+  removeJobAssignment: (jobId: number, assignmentId: number) =>
+    request(`/api/jobs/${jobId}/assignments/${assignmentId}/remove`, { method: 'POST' }),
+  assignCandidates: (id: number) =>
+    request<{ items: AssignCandidate[] }>(`/api/jobs/${id}/assign-candidates`),
+  cancelJob: (id: number, note: string) =>
+    request<JobDetail>(`/api/jobs/${id}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ note }),
+    }),
+  jobDuplicates: (params: {
+    clientId: number;
+    departmentId: number;
+    startDate: string;
+    endDate: string;
+    jobTypeId?: number;
+    title?: string;
+    excludeId?: number;
+  }) => {
+    const q = new URLSearchParams();
+    q.set('clientId', String(params.clientId));
+    q.set('departmentId', String(params.departmentId));
+    q.set('startDate', params.startDate);
+    q.set('endDate', params.endDate);
+    if (params.jobTypeId) q.set('jobTypeId', String(params.jobTypeId));
+    if (params.title) q.set('title', params.title);
+    if (params.excludeId) q.set('excludeId', String(params.excludeId));
+    return request<{ items: DuplicateJobHit[] }>(`/api/jobs/duplicates?${q}`);
+  },
+  completeJob: (
+    id: number,
+    inspectorId: number,
+    comments: string,
+    agreedPriceUsd?: number | null,
+    members?: CompleteJobMemberPayload[]
+  ) =>
     request<JobDetail>(`/api/jobs/${id}/complete`, {
       method: 'POST',
-      body: JSON.stringify({ inspectorId, comments, agreedPriceUsd }),
+      body: JSON.stringify({ inspectorId, comments, agreedPriceUsd, members }),
     }),
   updateJobPrice: (id: number, agreedPriceUsd: number) =>
     request<JobDetail>(`/api/jobs/${id}/price`, { method: 'PUT', body: JSON.stringify({ agreedPriceUsd }) }),
-  jobTypes: () => request<JobType[]>('/api/job-types'),
-  jobTypesAll: () => request<JobType[]>('/api/job-types/all'),
+  jobTypes: (params?: { departmentId?: number; departmentCode?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.departmentId) q.set('departmentId', String(params.departmentId));
+    if (params?.departmentCode) q.set('departmentCode', params.departmentCode);
+    const qs = q.toString();
+    return request<JobType[]>(`/api/job-types${qs ? `?${qs}` : ''}`);
+  },
+  jobTypesAll: (params?: { departmentId?: number; departmentCode?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.departmentId) q.set('departmentId', String(params.departmentId));
+    if (params?.departmentCode) q.set('departmentCode', params.departmentCode);
+    const qs = q.toString();
+    return request<JobType[]>(`/api/job-types/all${qs ? `?${qs}` : ''}`);
+  },
   createJobType: (data: JobTypePayload) =>
     request<JobType>('/api/job-types', { method: 'POST', body: JSON.stringify(data) }),
   updateJobType: (id: number, data: Partial<JobTypePayload> & { active?: boolean }) =>
@@ -247,36 +318,50 @@ export const api = {
   markAllNotificationsRead: () => request('/api/notifications/read-all', { method: 'POST' }),
   updateJob: (id: number, data: UpdateJobPayload) =>
     request<JobDetail>(`/api/jobs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  reports: (params?: { periodStart?: string; periodEnd?: string }) => {
+  reports: (params?: { periodStart?: string; periodEnd?: string; departmentId?: number }) => {
     const q = new URLSearchParams();
     if (params?.periodStart) q.set('periodStart', params.periodStart);
     if (params?.periodEnd) q.set('periodEnd', params.periodEnd);
+    if (params?.departmentId) q.set('departmentId', String(params.departmentId));
     const qs = q.toString();
     return request<ReportsData>(`/api/reports/summary${qs ? `?${qs}` : ''}`);
   },
-  overdueJobs: (params?: { periodStart?: string; periodEnd?: string }) => {
+  overdueJobs: (params?: { periodStart?: string; periodEnd?: string; departmentId?: number }) => {
     const q = new URLSearchParams();
     if (params?.periodStart) q.set('periodStart', params.periodStart);
     if (params?.periodEnd) q.set('periodEnd', params.periodEnd);
+    if (params?.departmentId) q.set('departmentId', String(params.departmentId));
     const qs = q.toString();
     return request<OverdueJobsReport>(`/api/reports/overdue-jobs${qs ? `?${qs}` : ''}`);
   },
-  activityReport: (params?: { periodStart?: string; periodEnd?: string }) => {
+  activityReport: (params?: { periodStart?: string; periodEnd?: string; departmentId?: number }) => {
     const q = new URLSearchParams();
     if (params?.periodStart) q.set('periodStart', params.periodStart);
     if (params?.periodEnd) q.set('periodEnd', params.periodEnd);
+    if (params?.departmentId) q.set('departmentId', String(params.departmentId));
     const qs = q.toString();
     return request<ActivityReport>(`/api/reports/activity${qs ? `?${qs}` : ''}`);
   },
-  costReport: (params?: { periodStart?: string; periodEnd?: string }) => {
+  costReport: (params?: { periodStart?: string; periodEnd?: string; departmentId?: number }) => {
     const q = new URLSearchParams();
     if (params?.periodStart) q.set('periodStart', params.periodStart);
     if (params?.periodEnd) q.set('periodEnd', params.periodEnd);
+    if (params?.departmentId) q.set('departmentId', String(params.departmentId));
     const qs = q.toString();
     return request<CostReport>(`/api/reports/costs${qs ? `?${qs}` : ''}`);
   },
-  map: () => request<MapData>('/api/map'),
-  priceChart: () => request<PriceChartData>('/api/price-chart'),
+  map: (params?: { departmentId?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.departmentId) q.set('departmentId', String(params.departmentId));
+    const qs = q.toString();
+    return request<MapData>(`/api/map${qs ? `?${qs}` : ''}`);
+  },
+  priceChart: (params?: { departmentId?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.departmentId) q.set('departmentId', String(params.departmentId));
+    const qs = q.toString();
+    return request<PriceChartData>(`/api/price-chart${qs ? `?${qs}` : ''}`);
+  },
   updatePriceChart: (data: { globalDefaultUsd?: number; items?: { jobTypeId: number; priceUsd: number }[] }) =>
     request<PriceChartData>('/api/price-chart', { method: 'PUT', body: JSON.stringify(data) }),
 };
@@ -323,12 +408,15 @@ export type JobType = {
   name: string;
   description?: string;
   active?: boolean;
+  departmentId?: number;
+  department?: Department;
   defaultPriceUsd?: number | null;
   certRequirements: { certification: Certification; mandatory: boolean }[];
   _count?: { jobs: number };
 };
 
 export type JobTypePayload = {
+  departmentId: number;
   code: string;
   name: string;
   description?: string;
@@ -345,6 +433,7 @@ export type Job = {
   assignments?: Assignment[];
   proposals?: Proposal[];
   requiresQeApproval?: boolean;
+  requiredInspectorCount?: number;
   agreedPriceUsd?: number | null;
   suggestedPriceUsd?: number | null;
   location?: string | null;
@@ -389,10 +478,54 @@ export type Proposal = {
   inspector: Inspector;
 };
 
+export type DuplicateJobHit = {
+  id: number;
+  ref: string;
+  title: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  clientName: string;
+  jobTypeName: string | null;
+};
+
+export type AssignBand = 'ready' | 'caution' | 'busy';
+
+export type AssignCandidate = {
+  id: number;
+  employeeNo: string;
+  name: string;
+  email?: string | null;
+  jobTitle?: string | null;
+  status: string;
+  qeApproved: boolean;
+  department: { id: number; name: string; code: string };
+  band: AssignBand;
+  reasons: string[];
+  crossDept: boolean;
+  qeOk: boolean;
+  certsOk: boolean;
+  onLeave: boolean;
+  busy: boolean;
+  selectable: boolean;
+};
+
 export type Assignment = {
   id: number; status: string; role: string; allocatedHours: number;
   rejectReason?: string | null;
-  inspector: Inspector; job: Job;
+  mobDate?: string | null;
+  demobDate?: string | null;
+  dailyCostUsd?: number | null;
+  dailyBillableUsd?: number | null;
+  inspector: Inspector; job?: Job;
+};
+
+export type CompleteJobMemberPayload = {
+  assignmentId: number;
+  mobDate?: string | null;
+  demobDate?: string | null;
+  dailyCostUsd?: number | null;
+  dailyBillableUsd?: number | null;
 };
 
 export type Timesheet = {
@@ -460,6 +593,7 @@ export type CreateJobPayload = {
   scope?: string; location?: string; startDate: string; endDate: string;
   priority?: string; estimatedHours?: number; certificationIds?: number[];
   requiresQeApproval?: boolean;
+  requiredInspectorCount?: number;
 };
 
 export type ActivityLogPayload = {
@@ -821,10 +955,12 @@ export type ActivityReportItem = {
   inspectorId: number;
   inspectorName: string;
   employeeNo: string;
+  inspectorDepartment?: string;
   jobId: number;
   jobRef: string;
   jobTitle: string;
   jobStatus: string;
+  jobDepartment?: string;
   client: string;
 };
 
@@ -904,8 +1040,10 @@ export type MapJob = {
   location?: string | null;
   clientId: number;
   clientName: string;
+  departmentId?: number;
   latitude: number;
   longitude: number;
+  inspectors?: { id: number; name: string; employeeNo: string }[];
 };
 
 export type MapData = {
@@ -915,5 +1053,12 @@ export type MapData = {
 
 export type PriceChartData = {
   globalDefaultUsd: number;
-  items: { jobTypeId: number; code: string; name: string; priceUsd: number | null }[];
+  items: {
+    jobTypeId: number;
+    code: string;
+    name: string;
+    departmentId?: number;
+    departmentName?: string;
+    priceUsd: number | null;
+  }[];
 };

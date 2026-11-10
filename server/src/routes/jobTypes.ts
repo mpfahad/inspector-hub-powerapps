@@ -8,21 +8,42 @@ const router = Router();
 router.use(authMiddleware);
 
 const include = {
+  department: true,
   certRequirements: { include: { certification: true } },
   _count: { select: { jobs: true } },
 };
 
-router.get('/', async (_req, res) => {
+function deptFilter(req: { query: Record<string, unknown> }) {
+  const raw = req.query.departmentId ?? req.query.departmentCode;
+  if (raw == null || raw === '') return undefined;
+  if (typeof raw === 'string' && /^\d+$/.test(raw)) {
+    return { departmentId: Number(raw) };
+  }
+  if (typeof raw === 'string') {
+    return { department: { code: raw.toUpperCase() } };
+  }
+  return undefined;
+}
+
+router.get('/', async (req, res) => {
+  const where = {
+    active: true,
+    ...deptFilter(req),
+  };
   const types = await prisma.jobType.findMany({
-    where: { active: true },
+    where,
     include,
     orderBy: { name: 'asc' },
   });
   res.json(types);
 });
 
-router.get('/all', requireRole('Coordinator', 'Manager', 'Admin'), async (_req, res) => {
-  const types = await prisma.jobType.findMany({ include, orderBy: { name: 'asc' } });
+router.get('/all', requireRole('Coordinator', 'Manager', 'Admin'), async (req, res) => {
+  const types = await prisma.jobType.findMany({
+    where: deptFilter(req),
+    include,
+    orderBy: { name: 'asc' },
+  });
   res.json(types);
 });
 
@@ -40,6 +61,7 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', requireRole('Coordinator', 'Manager', 'Admin'), validateBody(createJobTypeSchema), async (req, res) => {
   const body = req.body as {
+    departmentId: number;
     code: string;
     name: string;
     description?: string | null;
@@ -47,8 +69,15 @@ router.post('/', requireRole('Coordinator', 'Manager', 'Admin'), validateBody(cr
     defaultPriceUsd?: number | null;
   };
 
+  const dept = await prisma.department.findUnique({ where: { id: body.departmentId } });
+  if (!dept) {
+    res.status(400).json({ error: 'Department not found' });
+    return;
+  }
+
   const type = await prisma.jobType.create({
     data: {
+      departmentId: body.departmentId,
       code: body.code,
       name: body.name,
       description: body.description ?? null,
@@ -75,6 +104,7 @@ router.post('/', requireRole('Coordinator', 'Manager', 'Admin'), validateBody(cr
 router.put('/:id', requireRole('Coordinator', 'Manager', 'Admin'), validateBody(updateJobTypeSchema), async (req, res) => {
   const id = Number(req.params.id);
   const body = req.body as {
+    departmentId?: number;
     code?: string;
     name?: string;
     description?: string | null;
@@ -99,6 +129,7 @@ router.put('/:id', requireRole('Coordinator', 'Manager', 'Admin'), validateBody(
   const type = await prisma.jobType.update({
     where: { id },
     data: {
+      departmentId: body.departmentId,
       code: body.code,
       name: body.name,
       description: body.description,

@@ -3,10 +3,14 @@ import { prisma } from '../lib/prisma.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import {
   assignInspector,
+  cancelJob,
   completeJob,
   recordJobStatus,
+  releaseJobForAssignment,
+  removeAssignmentFromTeam,
   runJobAssessment,
 } from '../services/jobWorkflow.js';
+import { listAssignCandidates } from '../services/assignCandidates.js';
 import { recordAudit } from '../services/audit.js';
 import { certSummaryForJob } from '../services/jobCerts.js';
 import { resolveDefaultPriceUsd } from '../services/pricing.js';
@@ -24,6 +28,7 @@ import { buildJobProgress } from '../services/jobProgress.js';
 import { validateBody } from '../lib/validate.js';
 import {
   assignJobSchema,
+  cancelJobSchema,
   completeJobSchema,
   createJobSchema,
   updateJobPriceSchema,
@@ -34,7 +39,10 @@ const router = Router();
 router.use(authMiddleware);
 
 const inspectorOnAssignment = {
-  include: { inspectorCerts: { include: { certification: true } } },
+  include: {
+    department: true,
+    inspectorCerts: { include: { certification: true } },
+  },
 };
 
 const jobInclude = {
@@ -42,9 +50,9 @@ const jobInclude = {
   department: true,
   jobType: { include: { certRequirements: { include: { certification: true } } } },
   certRequirements: { include: { certification: true } },
-  proposals: { include: { inspector: true }, orderBy: { rank: 'asc' as const } },
+  proposals: { include: { inspector: { include: { department: true } } }, orderBy: { rank: 'asc' as const } },
   assignments: { include: { inspector: inspectorOnAssignment }, orderBy: { createdAt: 'desc' as const } },
-  timesheets: { include: { inspector: true } },
+  timesheets: { include: { inspector: { include: { department: true } } } },
   statusHistory: { orderBy: { createdAt: 'desc' as const }, take: 20 },
 };
 
@@ -90,6 +98,66 @@ router.get('/', async (req, res) => {
     orderBy: { updatedAt: 'desc' },
   });
   res.json(jobs.map((j) => withCertSummary(j)));
+});
+
+/** Possible duplicates: same client + dept + (jobType or title) with overlapping dates. */
+router.get('/duplicates', requireRole(...STAFF_ROLES), async (req, res) => {
+  const clientId = Number(req.query.clientId);
+  const departmentId = Number(req.query.departmentId);
+  const startDate = typeof req.query.startDate === 'string' ? req.query.startDate.slice(0, 10) : '';
+  const endDate = typeof req.query.endDate === 'string' ? req.query.endDate.slice(0, 10) : '';
+  const jobTypeId = req.query.jobTypeId ? Number(req.query.jobTypeId) : undefined;
+  const title = typeof req.query.title === 'string' ? req.query.title.trim() : '';
+  const excludeId = req.query.excludeId ? Number(req.query.excludeId) : undefined;
+
+  if (!Number.isFinite(clientId) || !Number.isFinite(departmentId) || !startDate || !endDate) {
+    res.status(400).json({ error: 'clientId, departmentId, startDate, and endDate are required' });
+    return;
+  }
+  if (!(jobTypeId && Number.isFinite(jobTypeId)) && !title) {
+    res.json({ items: [] });
+    return;
+  }
+
+  const start = new Date(startDate + 'T00:00:00');
+  const end = new Date(endDate + 'T23:59:59');
+
+  const candidates = await prisma.job.findMany({
+    where: {
+      clientId,
+      departmentId,
+      status: { notIn: ['Cancelled'] },
+      ...(excludeId && Number.isFinite(excludeId) ? { id: { not: excludeId } } : {}),
+      ...(jobTypeId && Number.isFinite(jobTypeId) ? { jobTypeId } : { title }),
+      startDate: { lte: end },
+      endDate: { gte: start },
+    },
+    select: {
+      id: true,
+      ref: true,
+      title: true,
+      status: true,
+      startDate: true,
+      endDate: true,
+      client: { select: { name: true } },
+      jobType: { select: { name: true, code: true } },
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: 10,
+  });
+
+  res.json({
+    items: candidates.map((j) => ({
+      id: j.id,
+      ref: j.ref,
+      title: j.title,
+      status: j.status,
+      startDate: j.startDate,
+      endDate: j.endDate,
+      clientName: j.client.name,
+      jobTypeName: j.jobType?.name ?? null,
+    })),
+  });
 });
 
 router.get('/pipeline', requireRole(...STAFF_ROLES), async (_req, res) => {
@@ -201,48 +269,99 @@ router.post('/', requireRole(...STAFF_ROLES), validateBody(createJobSchema), asy
     },
     include: jobInclude,
   });
-  await recordJobStatus(job.id, 'Draft', req.user?.email, 'Job created');
-  res.status(201).json(withCertSummary(job));
+  // Seed certs from job type when create payload omitted them
+  if (certificationIds.length === 0 && jobTypeId) {
+    const jt = await prisma.jobType.findUnique({
+      where: { id: jobTypeId },
+      include: { certRequirements: true },
+    });
+    if (jt?.certRequirements.length) {
+      await prisma.jobCertRequirement.createMany({
+        data: jt.certRequirements.map((r) => ({
+          jobId: job.id,
+          certificationId: r.certificationId,
+          mandatory: r.mandatory,
+        })),
+      });
+    }
+  }
+  // Land as Proposed for board assign — no ranking engine
+  await recordJobStatus(job.id, 'Proposed', req.user?.email, 'Job created — awaiting manual assignment');
+  const created = await prisma.job.findUnique({ where: { id: job.id }, include: jobInclude });
+  res.status(201).json(withCertSummary(created ?? job));
 });
 
 router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobSchema), async (req, res) => {
   const jobId = Number(req.params.id);
-  const existing = await prisma.job.findUnique({ where: { id: jobId } });
+  const existing = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: { _count: { select: { activityLogs: true } } },
+  });
   if (!existing) {
     res.status(404).json({ error: 'Not found' });
     return;
   }
 
-  const editableStatuses = ['Draft', 'Proposed'];
-  if (!editableStatuses.includes(existing.status)) {
+  const fullEdit = ['Draft', 'Proposed'].includes(existing.status);
+  const softEdit = ['Active', 'PendingAcceptance'].includes(existing.status);
+  if (!fullEdit && !softEdit) {
     res.status(400).json({ error: `Cannot edit job in ${existing.status} status` });
     return;
   }
 
   const body = req.body as Record<string, unknown>;
+
+  if (softEdit && !fullEdit) {
+    const hardKeys = ['clientId', 'departmentId', 'jobTypeId', 'agreedPriceUsd', 'requiresQeApproval'];
+    for (const key of hardKeys) {
+      if (body[key] !== undefined) {
+        res.status(400).json({ error: `Cannot change ${key} while job is ${existing.status}` });
+        return;
+      }
+    }
+    if (body.startDate !== undefined) {
+      const nextStart = String(body.startDate).slice(0, 10);
+      const prevStart = existing.startDate.toISOString().slice(0, 10);
+      if (nextStart !== prevStart && existing._count.activityLogs > 0) {
+        res.status(400).json({ error: 'Start date cannot change after activity has been logged' });
+        return;
+      }
+      if (nextStart !== prevStart) {
+        res.status(400).json({ error: 'Start date is locked on active jobs' });
+        return;
+      }
+    }
+  }
+
   const nextClientId = body.clientId !== undefined ? Number(body.clientId) : existing.clientId;
   const nextLocation =
     body.location !== undefined ? (body.location ? String(body.location) : null) : existing.location;
   const coords = await coordsForJob(nextClientId, nextLocation);
 
+  const softData = {
+    title: body.title !== undefined ? String(body.title) : undefined,
+    scope: body.scope !== undefined ? (body.scope ? String(body.scope) : null) : undefined,
+    location: body.location !== undefined ? (body.location ? String(body.location) : null) : undefined,
+    latitude: coords?.latitude ?? undefined,
+    longitude: coords?.longitude ?? undefined,
+    endDate: body.endDate ? new Date(String(body.endDate)) : undefined,
+    priority: body.priority !== undefined ? String(body.priority) : undefined,
+    estimatedHours: body.estimatedHours !== undefined ? Number(body.estimatedHours) : undefined,
+  };
+
+  const fullData = {
+    ...softData,
+    startDate: body.startDate ? new Date(String(body.startDate)) : undefined,
+    clientId: body.clientId !== undefined ? Number(body.clientId) : undefined,
+    departmentId: body.departmentId !== undefined ? Number(body.departmentId) : undefined,
+    jobTypeId: body.jobTypeId !== undefined ? (body.jobTypeId ? Number(body.jobTypeId) : null) : undefined,
+    requiresQeApproval: body.requiresQeApproval !== undefined ? Boolean(body.requiresQeApproval) : undefined,
+    agreedPriceUsd: body.agreedPriceUsd !== undefined ? (body.agreedPriceUsd as number | null) : undefined,
+  };
+
   const job = await prisma.job.update({
     where: { id: jobId },
-    data: {
-      title: body.title !== undefined ? String(body.title) : undefined,
-      scope: body.scope !== undefined ? (body.scope ? String(body.scope) : null) : undefined,
-      location: body.location !== undefined ? (body.location ? String(body.location) : null) : undefined,
-      latitude: coords?.latitude ?? undefined,
-      longitude: coords?.longitude ?? undefined,
-      startDate: body.startDate ? new Date(String(body.startDate)) : undefined,
-      endDate: body.endDate ? new Date(String(body.endDate)) : undefined,
-      priority: body.priority !== undefined ? String(body.priority) : undefined,
-      estimatedHours: body.estimatedHours !== undefined ? Number(body.estimatedHours) : undefined,
-      clientId: body.clientId !== undefined ? Number(body.clientId) : undefined,
-      departmentId: body.departmentId !== undefined ? Number(body.departmentId) : undefined,
-      jobTypeId: body.jobTypeId !== undefined ? (body.jobTypeId ? Number(body.jobTypeId) : null) : undefined,
-      requiresQeApproval: body.requiresQeApproval !== undefined ? Boolean(body.requiresQeApproval) : undefined,
-      agreedPriceUsd: body.agreedPriceUsd !== undefined ? (body.agreedPriceUsd as number | null) : undefined,
-    },
+    data: fullEdit ? fullData : softData,
     include: jobInclude,
   });
 
@@ -251,7 +370,12 @@ router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobSchema), a
     action: 'job.updated',
     entityType: 'Job',
     entityId: jobId,
-    payload: { ref: job.ref, title: job.title, requiresQeApproval: job.requiresQeApproval },
+    payload: {
+      ref: job.ref,
+      title: job.title,
+      mode: fullEdit ? 'full' : 'soft',
+      fields: Object.keys(body),
+    },
   });
   const fresh = await prisma.job.findUnique({ where: { id: jobId }, include: jobInclude });
   res.json(withCertSummary(fresh ?? job));
@@ -284,20 +408,60 @@ router.put('/:id/price', requireRole(...STAFF_ROLES), validateBody(updateJobPric
   res.json(withCertSummary(updated));
 });
 
+/** Release Draft → Proposed without ranking engine (kept for older Draft rows). */
 router.post('/:id/submit', requireRole(...STAFF_ROLES), async (req, res) => {
   const jobId = Number(req.params.id);
-  const result = await runJobAssessment(jobId, req.user?.email);
-  const job = await prisma.job.findUnique({ where: { id: jobId }, include: jobInclude });
-  res.json({ job: job ? withCertSummary(job) : job, assessment: result });
+  try {
+    await releaseJobForAssignment(jobId, req.user?.email);
+    const job = await prisma.job.findUnique({ where: { id: jobId }, include: jobInclude });
+    res.json({ job: job ? withCertSummary(job) : job });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Submit failed' });
+  }
+});
+
+router.get('/:id/assign-candidates', requireRole(...STAFF_ROLES), async (req, res) => {
+  const jobId = Number(req.params.id);
+  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  if (!job) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  try {
+    const items = await listAssignCandidates(jobId);
+    res.json({ items });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Could not load candidates' });
+  }
+});
+
+router.post('/:id/cancel', requireRole(...STAFF_ROLES), validateBody(cancelJobSchema), async (req, res) => {
+  const jobId = Number(req.params.id);
+  const { note } = req.body as { note: string };
+  try {
+    await cancelJob(jobId, note, req.user?.email, req.user?.id);
+    const job = await prisma.job.findUnique({ where: { id: jobId }, include: jobInclude });
+    if (!job) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+    res.json(withCertSummary(job));
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Cancel failed' });
+  }
 });
 
 router.post('/:id/assign', requireRole(...STAFF_ROLES), validateBody(assignJobSchema), async (req, res) => {
-  const { inspectorId, role, allocatedHours, agreedPriceUsd } = req.body as {
-    inspectorId: number;
-    role?: string;
-    allocatedHours?: number;
-    agreedPriceUsd?: number | null;
-  };
+  const { inspectorId, role, allocatedHours, agreedPriceUsd, mobDate, demobDate, allowOverfill } =
+    req.body as {
+      inspectorId: number;
+      role?: string;
+      allocatedHours?: number;
+      agreedPriceUsd?: number | null;
+      mobDate?: string;
+      demobDate?: string;
+      allowOverfill?: boolean;
+    };
   const job = await prisma.job.findUnique({ where: { id: Number(req.params.id) } });
   if (!job) {
     res.status(404).json({ error: 'Not found' });
@@ -311,13 +475,35 @@ router.post('/:id/assign', requireRole(...STAFF_ROLES), validateBody(assignJobSc
       allocatedHours ?? job.estimatedHours,
       req.user?.email,
       req.user?.id,
-      { agreedPriceUsd }
+      { agreedPriceUsd, mobDate, demobDate, allowOverfill }
     );
     res.json(assignment);
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Assign failed' });
   }
 });
+
+router.post(
+  '/:id/assignments/:assignmentId/remove',
+  requireRole(...STAFF_ROLES),
+  async (req, res) => {
+    const jobId = Number(req.params.id);
+    const assignmentId = Number(req.params.assignmentId);
+    const existing = await prisma.assignment.findFirst({
+      where: { id: assignmentId, jobId },
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'Assignment not found on this job' });
+      return;
+    }
+    try {
+      const assignment = await removeAssignmentFromTeam(assignmentId, req.user?.email, req.user?.id);
+      res.json(assignment);
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : 'Remove failed' });
+    }
+  }
+);
 
 router.post('/:id/rerun-assessment', requireRole(...STAFF_ROLES), async (req, res) => {
   const result = await runJobAssessment(Number(req.params.id), req.user?.email);
@@ -329,23 +515,32 @@ router.post(
   requireRole('Inspector', 'Coordinator', 'Manager', 'Admin'),
   validateBody(completeJobSchema),
   async (req, res) => {
-    const { inspectorId, comments, agreedPriceUsd } = req.body as {
+    const { inspectorId, comments, agreedPriceUsd, members } = req.body as {
       inspectorId: number;
       comments?: string;
       agreedPriceUsd?: number | null;
+      members?: {
+        assignmentId: number;
+        mobDate?: string | null;
+        demobDate?: string | null;
+        dailyCostUsd?: number | null;
+        dailyBillableUsd?: number | null;
+      }[];
     };
     try {
       await assertCanCompleteJob(Number(req.params.id), inspectorId, req.user!);
       const staffPrice = isStaff(req.user!.role) ? agreedPriceUsd : undefined;
+      const staffMembers = isStaff(req.user!.role) ? members : undefined;
       const job = await completeJob(Number(req.params.id), inspectorId, comments ?? '', req.user?.email, {
         agreedPriceUsd: staffPrice,
+        members: staffMembers,
       });
       await recordAudit({
         userId: req.user?.id,
         action: 'job.completed',
         entityType: 'Job',
         entityId: Number(req.params.id),
-        payload: { inspectorId, comments: comments ?? '', agreedPriceUsd: staffPrice },
+        payload: { inspectorId, comments: comments ?? '', agreedPriceUsd: staffPrice, members: staffMembers },
       });
       res.json(job);
     } catch (err) {

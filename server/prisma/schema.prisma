@@ -89,6 +89,7 @@ model Department {
   managerEmail   String?
   inspectors     Inspector[]
   jobs           Job[]
+  jobTypes       JobType[]
 }
 
 model Client {
@@ -150,7 +151,10 @@ model Certification {
 
 model JobType {
   id          Int      @id @default(autoincrement())
-  code        String   @unique
+  /// Owned by a department (CM-018). Code unique within that department.
+  departmentId Int
+  department   Department @relation(fields: [departmentId], references: [id])
+  code        String
   name        String
   description String?
   active      Boolean  @default(true)
@@ -159,6 +163,9 @@ model JobType {
   certRequirements JobTypeCertRequirement[]
   jobs        Job[]
   priceChart  PriceChart?
+
+  @@unique([departmentId, code])
+  @@index([departmentId])
 }
 
 /// Singleton-style price chart: one global default (jobTypeId null) plus optional per-type rows.
@@ -287,6 +294,10 @@ model Assignment {
   createdByEmail  String?
   decidedAt       DateTime?
   createdAt       DateTime         @default(now())
+  /// Per-inspector mobilization (chopper/client). Falls back to job.startDate when null.
+  mobDate           DateTime?
+  /// Per-inspector demobilization. Falls back to job.endDate when null.
+  demobDate         DateTime?
   /// Snapshot of inspector daily CTC at assign (QAR amounts; field name kept *Usd).
   dailyCostUsd      Float?
   /// Snapshot of inspector daily billable at assign.

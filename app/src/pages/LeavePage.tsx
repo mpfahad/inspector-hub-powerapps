@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type Inspector, type LeaveRequest } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useOptionalDepartment } from '../context/DepartmentContext';
 import { AuditTrail } from '../components/audit/AuditTrail';
 
 const LEAVE_TYPES = ['Annual leave', 'Sick leave', 'Training', 'Personal', 'Other'];
@@ -16,6 +17,8 @@ const emptyForm = {
 
 export function LeavePage() {
   const { user } = useAuth();
+  const deptCtx = useOptionalDepartment();
+  const dept = deptCtx?.department ?? null;
   const isStaff = ['Coordinator', 'Manager', 'Admin'].includes(user?.role ?? '');
   const [items, setItems] = useState<LeaveRequest[]>([]);
   const [inspectors, setInspectors] = useState<Inspector[]>([]);
@@ -30,6 +33,19 @@ export function LeavePage() {
     load();
     if (isStaff) api.inspectors().then(setInspectors);
   }, [isStaff]);
+
+  const scopedInspectors = useMemo(() => {
+    if (!dept) return inspectors;
+    return inspectors.filter((i) => i.department.id === dept.id);
+  }, [inspectors, dept?.id]);
+
+  const scopedItems = useMemo(() => {
+    if (!isStaff || !dept) return items;
+    return items.filter((l) => l.inspector.department.id === dept.id);
+  }, [items, isStaff, dept?.id]);
+
+  const inspectorHref = (id: number) =>
+    deptCtx?.deptPath(`inspectors/${id}`) ?? `/inspectors/${id}`;
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -97,10 +113,14 @@ export function LeavePage() {
     <div className="max-w-4xl space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-navy">Leave</h1>
+          <h1 className="text-2xl font-bold text-navy">
+            Leave{dept ? ` · ${dept.name}` : ''}
+          </h1>
           <p className="text-sm text-slate-500 mt-1">
             {isStaff
-              ? 'Record approved leave for any inspector, or approve inspector requests. Approved leave is used by the planner and assignment engine.'
+              ? dept
+                ? 'Record or approve leave for inspectors in this department. Approved leave feeds the planner and assignment engine.'
+                : 'Record approved leave for any inspector, or approve inspector requests. Approved leave is used by the planner and assignment engine.'
               : 'Submit leave dates for approval. Coordinators can also add leave on your behalf.'}
           </p>
         </div>
@@ -124,7 +144,7 @@ export function LeavePage() {
                   disabled={!!editingId}
                 >
                   <option value="">Select inspector…</option>
-                  {inspectors.map((i) => (
+                  {scopedInspectors.map((i) => (
                     <option key={i.id} value={i.id}>{i.name} ({i.employeeNo})</option>
                   ))}
                 </select>
@@ -162,8 +182,10 @@ export function LeavePage() {
       {error && !showForm && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="card overflow-hidden">
-        {items.length === 0 ? (
-          <p className="text-sm text-slate-500 p-6">No leave recorded.</p>
+        {scopedItems.length === 0 ? (
+          <p className="text-sm text-slate-500 p-6">
+            {dept ? 'No leave recorded for this department.' : 'No leave recorded.'}
+          </p>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
@@ -178,11 +200,11 @@ export function LeavePage() {
               </tr>
             </thead>
             <tbody>
-              {items.map((l) => (
+              {scopedItems.map((l) => (
                 <tr key={l.id} className="border-t border-slate-100 align-top">
                   {isStaff && (
                     <td className="p-3">
-                      <Link to={`/inspectors/${l.inspector.id}`} className="font-medium text-teal hover:underline">
+                      <Link to={inspectorHref(l.inspector.id)} className="font-medium text-teal hover:underline">
                         {l.inspector.name}
                       </Link>
                     </td>

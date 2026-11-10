@@ -135,6 +135,53 @@ export async function runJobAssessment(jobId: number, userEmail?: string) {
   return { proposals: top, all: ranked.slice(0, 10) };
 }
 
+/** Move Draft → Proposed without running the ranking engine (manual assign flow). */
+export async function releaseJobForAssignment(jobId: number, userEmail?: string) {
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: {
+      jobType: { include: { certRequirements: true } },
+      certRequirements: true,
+    },
+  });
+  if (!job) throw new Error('Job not found');
+
+  if (job.certRequirements.length === 0 && job.jobType?.certRequirements.length) {
+    await prisma.jobCertRequirement.createMany({
+      data: job.jobType.certRequirements.map((r) => ({
+        jobId,
+        certificationId: r.certificationId,
+        mandatory: r.mandatory,
+      })),
+    });
+  }
+
+  if (job.status === 'Draft') {
+    await recordJobStatus(jobId, 'Proposed', userEmail, 'Released for manual assignment');
+  } else if (job.status !== 'Proposed') {
+    throw new Error(`Cannot release job in ${job.status} status`);
+  }
+
+  return prisma.job.findUniqueOrThrow({ where: { id: jobId } });
+}
+
+function parseDay(ymd?: string | null): Date | null {
+  if (!ymd) return null;
+  const d = new Date(ymd.slice(0, 10) + 'T00:00:00');
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Presence window for an assignment; falls back to job dates. */
+export function assignmentWindow(
+  assignment: { mobDate?: Date | null; demobDate?: Date | null },
+  job: { startDate: Date; endDate: Date }
+) {
+  return {
+    start: assignment.mobDate ?? job.startDate,
+    end: assignment.demobDate ?? job.endDate,
+  };
+}
+
 export async function assignInspector(
   jobId: number,
   inspectorId: number,
@@ -142,7 +189,12 @@ export async function assignInspector(
   allocatedHours: number,
   userEmail?: string,
   userId?: number,
-  options?: { agreedPriceUsd?: number | null }
+  options?: {
+    agreedPriceUsd?: number | null;
+    mobDate?: string;
+    demobDate?: string;
+    allowOverfill?: boolean;
+  }
 ) {
   const job = await prisma.job.findUnique({
     where: { id: jobId },
@@ -167,6 +219,12 @@ export async function assignInspector(
 
   const assignmentStatus = 'Active' as const;
 
+  const mobDate = parseDay(options?.mobDate) ?? job.startDate;
+  const demobDate = parseDay(options?.demobDate) ?? job.endDate;
+  if (demobDate < mobDate) {
+    throw new Error('Demob date must be on or after mob date');
+  }
+
   const priceToStore =
     options?.agreedPriceUsd !== undefined && options.agreedPriceUsd !== null
       ? options.agreedPriceUsd
@@ -188,6 +246,10 @@ export async function assignInspector(
       where: { id: existingForInspector.id },
       data: {
         status: assignmentStatus,
+        mobDate,
+        demobDate,
+        allocatedHours,
+        role,
         ...costSnapshot,
       },
     });
@@ -214,6 +276,8 @@ export async function assignInspector(
         inspectorName: inspector.name,
         role,
         allocatedHours,
+        mobDate: mobDate.toISOString().slice(0, 10),
+        demobDate: demobDate.toISOString().slice(0, 10),
         requiresQeApproval: job.requiresQeApproval,
         qeOverride,
         agreedPriceUsd: priceToStore,
@@ -225,25 +289,25 @@ export async function assignInspector(
     });
   }
 
-  for (const a of job.assignments) {
-    await prisma.assignment.update({
-      where: { id: a.id },
-      data: {
-        status: 'Cancelled',
-        decidedAt: new Date(),
-        rejectReason: a.inspectorId === inspectorId ? null : 'Reassigned by coordinator',
-      },
-    });
+  const openCount = job.assignments.length;
+  const required = job.requiredInspectorCount ?? 1;
+  if (openCount >= required && !options?.allowOverfill) {
+    throw new Error(
+      `Team already has ${openCount}/${required} inspectors. Confirm overfill to add another.`
+    );
   }
 
+  // Team-fill: do not cancel other open members (unlike legacy single-assignee reassign).
   const assignment = await prisma.assignment.create({
     data: {
       jobId,
       inspectorId,
-      role,
+      role: openCount === 0 ? role || 'Lead' : role || 'Member',
       allocatedHours,
       status: assignmentStatus,
       createdByEmail: userEmail,
+      mobDate,
+      demobDate,
       ...costSnapshot,
     },
     include: { inspector: true },
@@ -256,14 +320,13 @@ export async function assignInspector(
     });
   }
 
-  const action = job.assignments.length > 0 ? 'Reassigned to' : 'Assigned';
   await recordJobStatus(
     jobId,
     'Active',
     userEmail,
     qeOverride
-      ? `${action} ${inspector.name} (QE requirement overridden)`
-      : `${action} ${inspector.name}`
+      ? `Added ${inspector.name} to team (QE requirement overridden)`
+      : `Added ${inspector.name} to team`
   );
   if (inspector.email) {
     await notifyUser(
@@ -282,8 +345,12 @@ export async function assignInspector(
     payload: {
       inspectorId,
       inspectorName: inspector.name,
-      role,
+      role: assignment.role,
       allocatedHours,
+      mobDate: mobDate.toISOString().slice(0, 10),
+      demobDate: demobDate.toISOString().slice(0, 10),
+      teamSize: openCount + 1,
+      requiredInspectorCount: required,
       requiresQeApproval: job.requiresQeApproval,
       qeOverride,
       agreedPriceUsd: priceToStore,
@@ -291,6 +358,49 @@ export async function assignInspector(
   });
 
   return assignment;
+}
+
+/** Remove one open team member without cancelling the whole job. */
+export async function removeAssignmentFromTeam(
+  assignmentId: number,
+  userEmail?: string,
+  userId?: number
+) {
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    include: { inspector: true, job: true },
+  });
+  if (!assignment) throw new Error('Assignment not found');
+  if (!['Proposed', 'PendingAcceptance', 'Accepted', 'Active'].includes(assignment.status)) {
+    throw new Error('Assignment is not open');
+  }
+
+  await prisma.assignment.update({
+    where: { id: assignmentId },
+    data: {
+      status: 'Cancelled',
+      decidedAt: new Date(),
+      rejectReason: 'Removed from team by coordinator',
+    },
+  });
+
+  await recordAudit({
+    userId,
+    action: 'assignment.removed',
+    entityType: 'Assignment',
+    entityId: assignmentId,
+    payload: {
+      jobId: assignment.jobId,
+      inspectorId: assignment.inspectorId,
+      inspectorName: assignment.inspector.name,
+      by: userEmail,
+    },
+  });
+
+  return prisma.assignment.findUniqueOrThrow({
+    where: { id: assignmentId },
+    include: { inspector: true },
+  });
 }
 
 export async function acceptAssignment(assignmentId: number, userEmail?: string) {
@@ -335,17 +445,99 @@ export async function rejectAssignment(assignmentId: number, reason: string, use
   return assignment;
 }
 
+const CANCELABLE_STATUSES = ['Draft', 'Proposed', 'PendingAcceptance', 'Active'] as const;
+
+/** Soft-cancel a job with a required note. Open assignments are cancelled. */
+export async function cancelJob(jobId: number, note: string, userEmail?: string, userId?: number) {
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: { assignments: true },
+  });
+  if (!job) throw new Error('Job not found');
+  if (job.status === 'Cancelled') throw new Error('Job is already cancelled');
+  if (job.status === 'Closed' || job.status === 'Completed') {
+    throw new Error('Completed jobs cannot be cancelled');
+  }
+  if (!CANCELABLE_STATUSES.includes(job.status as (typeof CANCELABLE_STATUSES)[number])) {
+    throw new Error(`Cannot cancel job in ${job.status} status`);
+  }
+
+  await prisma.assignment.updateMany({
+    where: {
+      jobId,
+      status: { in: ['Proposed', 'PendingAcceptance', 'Accepted', 'Active'] },
+    },
+    data: {
+      status: 'Cancelled',
+      decidedAt: new Date(),
+      rejectReason: `Job cancelled: ${note}`,
+    },
+  });
+
+  await recordJobStatus(jobId, 'Cancelled', userEmail, note);
+  await recordAudit({
+    userId,
+    action: 'job.cancelled',
+    entityType: 'Job',
+    entityId: jobId,
+    payload: { ref: job.ref, title: job.title, note },
+  });
+
+  return prisma.job.findUniqueOrThrow({ where: { id: jobId } });
+}
+
+export type CompleteJobMemberUpdate = {
+  assignmentId: number;
+  mobDate?: string | null;
+  demobDate?: string | null;
+  dailyCostUsd?: number | null;
+  dailyBillableUsd?: number | null;
+};
+
 export async function completeJob(
   jobId: number,
   inspectorId: number,
   comments: string,
   userEmail?: string,
-  options?: { agreedPriceUsd?: number | null }
+  options?: { agreedPriceUsd?: number | null; members?: CompleteJobMemberUpdate[] }
 ) {
-  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: {
+      assignments: {
+        where: { status: { in: ['Accepted', 'Active', 'PendingAcceptance'] } },
+      },
+    },
+  });
   if (!job) throw new Error('Job not found');
   if (job.status !== 'Active' && job.status !== 'PendingAcceptance') {
     throw new Error('Only active jobs can be marked complete');
+  }
+
+  if (options?.members?.length) {
+    for (const m of options.members) {
+      const existing = job.assignments.find((a) => a.id === m.assignmentId);
+      if (!existing) throw new Error(`Assignment ${m.assignmentId} is not open on this job`);
+      const mobDate =
+        m.mobDate === undefined ? undefined : m.mobDate === null ? null : parseDay(m.mobDate);
+      const demobDate =
+        m.demobDate === undefined ? undefined : m.demobDate === null ? null : parseDay(m.demobDate);
+      const nextMob = mobDate === undefined ? existing.mobDate ?? job.startDate : mobDate ?? job.startDate;
+      const nextDemob =
+        demobDate === undefined ? existing.demobDate ?? job.endDate : demobDate ?? job.endDate;
+      if (nextDemob < nextMob) {
+        throw new Error(`Demob must be on or after mob for assignment ${m.assignmentId}`);
+      }
+      await prisma.assignment.update({
+        where: { id: m.assignmentId },
+        data: {
+          ...(mobDate !== undefined ? { mobDate } : {}),
+          ...(demobDate !== undefined ? { demobDate } : {}),
+          ...(m.dailyCostUsd !== undefined ? { dailyCostUsd: m.dailyCostUsd } : {}),
+          ...(m.dailyBillableUsd !== undefined ? { dailyBillableUsd: m.dailyBillableUsd } : {}),
+        },
+      });
+    }
   }
 
   await prisma.job.update({
@@ -358,8 +550,9 @@ export async function completeJob(
     },
   });
 
+  // Close all open team members (multi-PAX), not only the acting inspector.
   await prisma.assignment.updateMany({
-    where: { jobId, inspectorId, status: { in: ['Accepted', 'Active', 'PendingAcceptance'] } },
+    where: { jobId, status: { in: ['Accepted', 'Active', 'PendingAcceptance'] } },
     data: { status: 'Complete' },
   });
 

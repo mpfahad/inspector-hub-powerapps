@@ -25,7 +25,7 @@ Do **not** run `git reset --hard` on a shared branch unless you explicitly want 
 
 | Version / tag | Date | Git commit | Notes |
 |---------------|------|------------|-------|
-| **`v0.10.0-uat`** | 2026-11-15 | *(tagged on release commit)* | **Current UAT cut.** Includes CM-018…CM-021 (dept IA, cancel/duplicate, multi-PAX assign later/now, NDT/Rope intake templates). |
+| **`v0.10.0-uat`** | 2026-11-15 | e0b3ef5 | **Current UAT cut.** Includes CM-018…CM-021 (dept IA, cancel/duplicate, multi-PAX assign later/now, NDT/Rope intake templates). |
 | **`v0.9.0-uat-stable`** | 2026-11-04 | `d26dee4` (approx.) | Last good point **before** department-centric IA (**CM-018**). Includes Rigs roster, soft QE assign, multi-day activity logs, timesheet filters, Job Types UX. |
 | `checkpoint/pre-team-create-rows` | 2026-11-10 | `c284dd8` | Intermediate: multi-PAX add/remove **before** Assign now row UX (dates/day rate). |
 

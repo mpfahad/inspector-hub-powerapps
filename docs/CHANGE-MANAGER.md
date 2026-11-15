@@ -45,6 +45,9 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 | CM-016 | 2026-11-04 | Activity logs: multi-day batch entry (range + per-day hours) while keeping single-day mode; remove coordinator helper blurb on mark-complete card. | Stakeholder | Implemented | 2026-11-04: Activity log Single/Multi-day modes; `POST /api/activity-logs/batch` skips already-logged dates; job dates prefill range. |
 | CM-017 | 2026-11-04 | Timesheet generate: department + job type filters and inspector search. Job Types page: job types left / price chart right; inline edit on same card; add qualifications to catalog. Clients page search already present from prior work; create/update clients + geocode remain. | Stakeholder | Implemented | 2026-11-04: TimesheetGenerator filters. JobTypesPage two-column layout + inline edit + `POST /api/certifications`. |
 | CM-018 | 2026-11-04 | **Department-centric IA:** left nav = Notifications, Dashboard, then Departments with each department expanding to department-scoped Jobs / Inspectors / Job types / Planner / etc.; Clients global (with search). **Job types live under department** (not global). **Cross-dept assign allowed:** e.g. Lifting job ↔ Rigs inspector; assign UI offers other-dept inspectors. **Attribution:** job commercials/progress stay on **job’s department**; inspector utilization/productivity stay on **inspector’s home department**, with amber “loaned / borrowed” markers both ways. | Stakeholder | Implemented | 2026-11-05: Phase 1 — `JobType.departmentId`; nav `/d/:deptCode/…`; Jobs/Inspectors/Job types scoped; cross-dept assign + amber loaned/borrowed. Phase 2 — Planner / Competency / Leave / Reports locked to active department (util by home dept; activity/cost/overdue by job dept). Restore point: `v0.9.0-uat-stable`. |
+| CM-019 | 2026-11-10 | Soft **Cancel job** with required note (no hard delete in UI); warn on create when a likely duplicate exists (same client/dept/type + overlapping dates) with continue-anyway. | Stakeholder | Implemented | 2026-11-10: `POST /api/jobs/:id/cancel`; Cancel modal on job detail; `GET /api/jobs/duplicates` + amber banner on New job. Completed/Closed not cancellable. |
+| CM-020 | 2026-11-10 | **Multi-PAX teams:** set inspectors needed on create; add/remove multiple assignees on one job. Optional **Assign now** (N rows: inspector, start, end, day rate, row total) vs default **Assign later**. Job Active when ≥1 inspector assigned at create; otherwise Proposed. Manage team reuses the same row UI. Edit member rates at complete. | Stakeholder | Implemented | 2026-11-10–12: Team-fill assign (no mass-cancel); `requiredInspectorCount`; optional assignment mob/demob + day rate; `TeamSlotsEditor`; create `teamSlots`; complete updates member rate snapshots. Checkpoint before create-row UX: `checkpoint/pre-team-create-rows`. |
+| CM-021 | 2026-11-12 | NDT / Rope Access intake templates: employees (+ certs held) and job types (+ required certs); cert catalog derivable from those files. | Stakeholder | Implemented | 2026-11-12: `docs/NDT-RopeAccess-Employees.xlsx|.csv`, `docs/NDT-RopeAccess-JobTypes.xlsx|.csv`, generator `docs/generate_ndt_rope_intake_templates.py`. Import into live DB deferred. |
 
 ---
 
@@ -53,7 +56,8 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 | Marker | Meaning |
 |--------|---------|
 | **`v0.9.0-uat-stable`** | Git annotated tag + [`docs/VERSIONS.md`](./VERSIONS.md). Freeze point after **CM-014–CM-017**. Use this tag to restore if **CM-018** (department-centric IA) causes issues. |
+| **`v0.10.0-uat`** | Post–CM-018…CM-021 UAT cut: dept IA, cancel/duplicate, multi-PAX + assign later/now, NDT/Rope templates. See [`docs/VERSIONS.md`](./VERSIONS.md). |
 
 ---
 
-*Last updated: 2026-11-04*
+*Last updated: 2026-11-15*

@@ -1,8 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, type Certification, type Client, type DuplicateJobHit, type JobType } from '../lib/api';
+import {
+  api,
+  type Certification,
+  type Client,
+  type DuplicateJobHit,
+  type Inspector,
+  type JobType,
+} from '../lib/api';
 import { useDepartment } from '../context/DepartmentContext';
 import { statusLabel } from '../lib/jobs';
+import {
+  emptyTeamSlots,
+  filledTeamSlots,
+  TeamSlotsEditor,
+  type TeamSlot,
+} from '../components/jobs/TeamSlotsEditor';
+
+type AssignMode = 'later' | 'now';
 
 export function JobNewPage() {
   const navigate = useNavigate();
@@ -10,9 +25,12 @@ export function JobNewPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [certs, setCerts] = useState<Certification[]>([]);
   const [jobTypes, setJobTypes] = useState<JobType[]>([]);
+  const [inspectors, setInspectors] = useState<Inspector[]>([]);
   const [duplicates, setDuplicates] = useState<DuplicateJobHit[]>([]);
   const [dupAck, setDupAck] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [assignMode, setAssignMode] = useState<AssignMode>('later');
+  const [teamSlots, setTeamSlots] = useState<TeamSlot[]>([]);
   const [form, setForm] = useState({
     ref: `J-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
     title: '',
@@ -29,16 +47,20 @@ export function JobNewPage() {
     requiresQeApproval: false,
   });
 
+  const teamSize = Math.min(20, Math.max(1, Number(form.requiredInspectorCount) || 1));
+
   useEffect(() => {
     if (!department) return;
     Promise.all([
       api.clients(),
       api.certifications(),
       api.jobTypes({ departmentId: department.id }),
-    ]).then(([c, cert, types]) => {
+      api.inspectors(),
+    ]).then(([c, cert, types, ins]) => {
       setClients(c);
       setCerts(cert);
       setJobTypes(types);
+      setInspectors(ins.filter((i) => i.status !== 'Inactive'));
       setForm((f) => ({
         ...f,
         clientId: f.clientId || (c[0] ? String(c[0].id) : ''),
@@ -50,6 +72,33 @@ export function JobNewPage() {
       }));
     });
   }, [department]);
+
+  useEffect(() => {
+    if (assignMode !== 'now') return;
+    setTeamSlots((prev) => {
+      const defaults = {
+        startDate: form.startDate,
+        endDate: form.endDate,
+      };
+      if (prev.length === teamSize) {
+        return prev.map((s) => ({
+          ...s,
+          startDate: s.startDate || defaults.startDate,
+          endDate: s.endDate || defaults.endDate,
+        }));
+      }
+      if (prev.length < teamSize) {
+        return [
+          ...prev,
+          ...emptyTeamSlots(teamSize - prev.length, defaults).map((s, i) => ({
+            ...s,
+            key: `slot-extra-${prev.length + i}-${Date.now()}`,
+          })),
+        ];
+      }
+      return prev.slice(0, teamSize);
+    });
+  }, [assignMode, teamSize, form.startDate, form.endDate]);
 
   useEffect(() => {
     if (!department) return;
@@ -87,14 +136,7 @@ export function JobNewPage() {
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [
-    department,
-    form.clientId,
-    form.jobTypeId,
-    form.title,
-    form.startDate,
-    form.endDate,
-  ]);
+  }, [department, form.clientId, form.jobTypeId, form.title, form.startDate, form.endDate]);
 
   const applyJobType = (type: JobType) => {
     setForm((f) => ({
@@ -128,13 +170,34 @@ export function JobNewPage() {
       setSubmitError('Possible duplicates found — confirm “Continue anyway” below, or open the existing job.');
       return;
     }
+    if (assignMode === 'now') {
+      for (const s of filledTeamSlots(teamSlots)) {
+        if (!s.startDate || !s.endDate) {
+          setSubmitError('Each selected inspector needs start and end dates.');
+          return;
+        }
+        if (s.endDate < s.startDate) {
+          setSubmitError('Inspector end date must be on or after start date.');
+          return;
+        }
+      }
+    }
     if (form.requiresQeApproval) {
       const ok = window.confirm(
         'This job will prefer QE-approved inspectors. Non–QE staff can still be assigned with a warning override. Continue?'
       );
       if (!ok) return;
     }
-    const teamSize = Math.min(20, Math.max(1, Number(form.requiredInspectorCount) || 1));
+    const slotsPayload =
+      assignMode === 'now'
+        ? filledTeamSlots(teamSlots).map((s) => ({
+            inspectorId: Number(s.inspectorId),
+            startDate: s.startDate,
+            endDate: s.endDate,
+            dayRateUsd: s.dayRate.trim() === '' ? null : Number(s.dayRate),
+          }))
+        : undefined;
+
     try {
       const job = await api.createJob({
         ref: form.ref,
@@ -151,6 +214,7 @@ export function JobNewPage() {
         requiredInspectorCount: teamSize,
         certificationIds: form.certificationIds,
         requiresQeApproval: form.requiresQeApproval,
+        teamSlots: slotsPayload,
       });
       navigate(deptPath(`jobs/${job.id}`));
     } catch (err) {
@@ -159,13 +223,14 @@ export function JobNewPage() {
   };
 
   const selectedType = jobTypes.find((t) => String(t.id) === form.jobTypeId);
+  const filledCount = filledTeamSlots(teamSlots).length;
 
   if (deptLoading || !department) {
     return <p className="text-sm text-slate-500">Loading department…</p>;
   }
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-4xl">
       <form onSubmit={submit} className="card p-6 space-y-4">
         <p className="text-sm text-slate-500">
           Creating in <span className="font-medium text-navy">{department.name}</span>. Job types listed are for this
@@ -261,7 +326,7 @@ export function JobNewPage() {
         </div>
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="text-xs font-medium">Start</label>
+            <label className="text-xs font-medium">Job start</label>
             <input
               type="date"
               className="input mt-1"
@@ -271,7 +336,7 @@ export function JobNewPage() {
             />
           </div>
           <div>
-            <label className="text-xs font-medium">End</label>
+            <label className="text-xs font-medium">Job end</label>
             <input
               type="date"
               className="input mt-1"
@@ -290,12 +355,10 @@ export function JobNewPage() {
             />
           </div>
         </div>
+
         <div>
           <label className="text-xs font-medium">Inspectors needed</label>
-          <p className="text-xs text-slate-400 mb-2">
-            Rig teams are often 2–4 PAX. Assign people later from the board or job detail.
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 mt-2">
             {[1, 2, 3, 4].map((n) => (
               <button
                 key={n}
@@ -322,13 +385,52 @@ export function JobNewPage() {
           </div>
         </div>
 
+        <div className="rounded-lg border border-slate-200 p-4 space-y-3">
+          <p className="text-xs font-medium text-slate-500">Team assignment</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={`badge px-3 py-1.5 ${
+                assignMode === 'later' ? 'bg-teal/20 text-teal' : 'bg-slate-100 text-slate-600'
+              }`}
+              onClick={() => setAssignMode('later')}
+            >
+              Assign later
+            </button>
+            <button
+              type="button"
+              className={`badge px-3 py-1.5 ${
+                assignMode === 'now' ? 'bg-teal/20 text-teal' : 'bg-slate-100 text-slate-600'
+              }`}
+              onClick={() => setAssignMode('now')}
+            >
+              Assign now
+            </button>
+          </div>
+          <p className="text-xs text-slate-500">
+            {assignMode === 'later'
+              ? 'Job opens in New (Proposed). Assign from the board when ready — default for most teams.'
+              : 'Fill any of the rows below (blanks OK). If at least one inspector is set, the job becomes Active.'}
+          </p>
+          {assignMode === 'now' && (
+            <TeamSlotsEditor
+              slots={teamSlots}
+              inspectors={inspectors}
+              onChange={setTeamSlots}
+            />
+          )}
+        </div>
+
         {duplicates.length > 0 && (
           <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 space-y-2">
             <p className="text-sm font-medium text-amber-950">Possible duplicate</p>
             <ul className="space-y-1.5">
               {duplicates.map((d) => (
                 <li key={d.id} className="text-sm text-amber-900">
-                  <Link to={deptPath(`jobs/${d.id}`)} className="font-medium text-teal underline-offset-2 hover:underline">
+                  <Link
+                    to={deptPath(`jobs/${d.id}`)}
+                    className="font-medium text-teal underline-offset-2 hover:underline"
+                  >
                     {d.ref}
                   </Link>
                   {' — '}
@@ -395,7 +497,9 @@ export function JobNewPage() {
           Create job
         </button>
         <p className="text-xs text-slate-500">
-          Job opens as Proposed. Use <strong>Assign inspector</strong> on the board card when ready.
+          {assignMode === 'now' && filledCount > 0
+            ? `Creates Active with ${filledCount} inspector${filledCount === 1 ? '' : 's'} assigned.`
+            : 'Opens as Proposed (New). Use Manage team on the board when ready.'}
         </p>
       </form>
     </div>

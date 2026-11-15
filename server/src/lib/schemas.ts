@@ -8,6 +8,15 @@ export const loginSchema = z.object({
 });
 
 const optionalUsd = z.coerce.number().finite().nonnegative().max(1_000_000).optional().nullable();
+const dateYmd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD');
+
+export const teamSlotSchema = z.object({
+  inspectorId: z.coerce.number().int().positive().optional().nullable(),
+  startDate: dateYmd.optional(),
+  endDate: dateYmd.optional(),
+  /** Commercial day rate stored on assignment as dailyBillableUsd. */
+  dayRateUsd: optionalUsd,
+});
 
 export const createJobSchema = z.object({
   ref: z.string().trim().min(1).max(80),
@@ -25,6 +34,8 @@ export const createJobSchema = z.object({
   certificationIds: z.array(z.coerce.number().int().positive()).optional(),
   requiresQeApproval: z.coerce.boolean().optional(),
   agreedPriceUsd: optionalUsd,
+  /** Optional inspectors at create. Filled slots → Active; all blank → Proposed. */
+  teamSlots: z.array(teamSlotSchema).max(20).optional(),
 });
 
 export const updateJobSchema = z.object({
@@ -42,8 +53,6 @@ export const updateJobSchema = z.object({
   agreedPriceUsd: optionalUsd,
 });
 
-const dateYmd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD');
-
 export const assignJobSchema = z.object({
   inspectorId: z.coerce.number().int().positive(),
   role: z.string().trim().max(80).optional(),
@@ -51,6 +60,7 @@ export const assignJobSchema = z.object({
   agreedPriceUsd: optionalUsd,
   mobDate: dateYmd.optional(),
   demobDate: dateYmd.optional(),
+  dayRateUsd: optionalUsd,
   /** When true and team is already at requiredInspectorCount, allow adding another member. */
   allowOverfill: z.coerce.boolean().optional(),
 });

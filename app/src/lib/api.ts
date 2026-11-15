@@ -88,6 +88,7 @@ export const api = {
       agreedPriceUsd?: number | null;
       mobDate?: string;
       demobDate?: string;
+      dayRateUsd?: number | null;
       allowOverfill?: boolean;
       allocatedHours?: number;
     }
@@ -100,6 +101,7 @@ export const api = {
         agreedPriceUsd: opts?.agreedPriceUsd,
         mobDate: opts?.mobDate,
         demobDate: opts?.demobDate,
+        dayRateUsd: opts?.dayRateUsd,
         allowOverfill: opts?.allowOverfill,
         allocatedHours: opts?.allocatedHours,
       }),
@@ -587,6 +589,13 @@ export type JobsBoardResponse = {
 /** @deprecated use jobsBoard */
 export type PipelineResponse = JobsBoardResponse;
 
+export type CreateJobTeamSlot = {
+  inspectorId?: number | null;
+  startDate?: string;
+  endDate?: string;
+  dayRateUsd?: number | null;
+};
+
 export type CreateJobPayload = {
   ref: string; title: string; clientId: number; departmentId: number;
   jobTypeId?: number;
@@ -594,6 +603,7 @@ export type CreateJobPayload = {
   priority?: string; estimatedHours?: number; certificationIds?: number[];
   requiresQeApproval?: boolean;
   requiredInspectorCount?: number;
+  teamSlots?: CreateJobTeamSlot[];
 };
 
 export type ActivityLogPayload = {

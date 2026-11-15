@@ -285,8 +285,52 @@ router.post('/', requireRole(...STAFF_ROLES), validateBody(createJobSchema), asy
       });
     }
   }
-  // Land as Proposed for board assign — no ranking engine
-  await recordJobStatus(job.id, 'Proposed', req.user?.email, 'Job created — awaiting manual assignment');
+  const teamSlots = (Array.isArray(body.teamSlots) ? body.teamSlots : []) as {
+    inspectorId?: number | null;
+    startDate?: string;
+    endDate?: string;
+    dayRateUsd?: number | null;
+  }[];
+  const filledSlots = teamSlots.filter((s) => s.inspectorId != null && Number(s.inspectorId) > 0);
+
+  // Land as Proposed first (assign requires Proposed/Active)
+  await recordJobStatus(
+    job.id,
+    'Proposed',
+    req.user?.email,
+    filledSlots.length
+      ? 'Job created — assigning team'
+      : 'Job created — awaiting manual assignment'
+  );
+
+  if (filledSlots.length > 0) {
+    try {
+      for (let i = 0; i < filledSlots.length; i++) {
+        const slot = filledSlots[i];
+        await assignInspector(
+          job.id,
+          Number(slot.inspectorId),
+          i === 0 ? 'Lead' : 'Member',
+          body.estimatedHours ? Number(body.estimatedHours) : job.estimatedHours,
+          req.user?.email,
+          req.user?.id,
+          {
+            mobDate: slot.startDate,
+            demobDate: slot.endDate,
+            dayRateUsd: slot.dayRateUsd,
+            allowOverfill: true,
+          }
+        );
+      }
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : 'Job created but team assign failed',
+        jobId: job.id,
+      });
+      return;
+    }
+  }
+
   const created = await prisma.job.findUnique({ where: { id: job.id }, include: jobInclude });
   res.status(201).json(withCertSummary(created ?? job));
 });
@@ -452,16 +496,25 @@ router.post('/:id/cancel', requireRole(...STAFF_ROLES), validateBody(cancelJobSc
 });
 
 router.post('/:id/assign', requireRole(...STAFF_ROLES), validateBody(assignJobSchema), async (req, res) => {
-  const { inspectorId, role, allocatedHours, agreedPriceUsd, mobDate, demobDate, allowOverfill } =
-    req.body as {
-      inspectorId: number;
-      role?: string;
-      allocatedHours?: number;
-      agreedPriceUsd?: number | null;
-      mobDate?: string;
-      demobDate?: string;
-      allowOverfill?: boolean;
-    };
+  const {
+    inspectorId,
+    role,
+    allocatedHours,
+    agreedPriceUsd,
+    mobDate,
+    demobDate,
+    dayRateUsd,
+    allowOverfill,
+  } = req.body as {
+    inspectorId: number;
+    role?: string;
+    allocatedHours?: number;
+    agreedPriceUsd?: number | null;
+    mobDate?: string;
+    demobDate?: string;
+    dayRateUsd?: number | null;
+    allowOverfill?: boolean;
+  };
   const job = await prisma.job.findUnique({ where: { id: Number(req.params.id) } });
   if (!job) {
     res.status(404).json({ error: 'Not found' });
@@ -475,7 +528,7 @@ router.post('/:id/assign', requireRole(...STAFF_ROLES), validateBody(assignJobSc
       allocatedHours ?? job.estimatedHours,
       req.user?.email,
       req.user?.id,
-      { agreedPriceUsd, mobDate, demobDate, allowOverfill }
+      { agreedPriceUsd, mobDate, demobDate, dayRateUsd, allowOverfill }
     );
     res.json(assignment);
   } catch (err) {

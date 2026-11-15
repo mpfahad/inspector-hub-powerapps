@@ -1,0 +1,6 @@
+﻿Employee_No,Full_Name,Department_Code,Email,Job_Title,Status,QE_Approved,Highest_Qualification,Base_Location,Hire_Date,Daily_Cost_QAR,Daily_Billable_QAR,Cert_Code,Cert_Name,Cert_Issuer,Cert_Issued_On,Cert_Expires_On
+E5001,Example UT Inspector,NDT,ut.example@company.com,NDT Ultrasonic Inspector,Active,No,Diploma,Doha,2021-03-15,180,250,NDT-UT-L2,Ultrasonic Testing Level II,ASNT/PCN,2022-01-10,2027-01-09
+E5001,Example UT Inspector,NDT,ut.example@company.com,NDT Ultrasonic Inspector,Active,No,Diploma,Doha,2021-03-15,180,250,NDT-MT-L2,Magnetic Particle Level II,ASNT/PCN,2022-06-01,2027-05-31
+E5002,Example Rope Access NDT Tech,NDT,ra.ndt@company.com,Multi-discipline NDT Rope Access,Active,Yes,Graduate,Ras Laffan,2020-08-01,200,275,NDT-UT-L2,Ultrasonic Testing Level II,PCN,2021-04-12,2026-04-11
+E5002,Example Rope Access NDT Tech,NDT,ra.ndt@company.com,Multi-discipline NDT Rope Access,Active,Yes,Graduate,Ras Laffan,2020-08-01,200,275,IRATA-L2,IRATA Rope Access Level 2,IRATA,2023-02-20,2026-02-19
+E5003,Example Rope Tech (no NDT yet),RIGS,,Multi Disciplined Rope Technician,Active,No,,Doha,2023-10-08,,,IRATA-L1,IRATA Rope Access Level 1,IRATA,2024-01-15,2027-01-14

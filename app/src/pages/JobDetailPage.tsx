@@ -252,31 +252,37 @@ export function JobDetailPage() {
                 <span className="text-slate-500">Unassigned</span>
               ) : (
                 <ul className="space-y-2">
-                  {team.map((a) => (
-                    <li key={a.id} className="font-medium">
-                      <Link to={`/inspectors/${a.inspector.id}`} className="text-teal hover:underline">
-                        {a.inspector.name}
-                      </Link>
-                      <span className="text-slate-500 font-normal">
-                        {' '}
-                        ({a.inspector.employeeNo}) — {a.role} ·{' '}
-                      </span>
-                      <span className="badge bg-slate-100">
-                        {a.status === 'PendingAcceptance' ? 'Active' : a.status}
-                      </span>
-                      {a.inspector.qeApproved ? (
-                        <span className="badge bg-teal/10 text-teal ml-2">QE approved</span>
-                      ) : (
-                        <span className="badge bg-slate-100 text-slate-500 ml-2">Not QE-approved</span>
-                      )}
-                      {a.inspector.department &&
-                        a.inspector.department.id !== job.department.id && (
-                          <span className="badge bg-amber-100 text-amber-900 ml-2">
-                            Borrowed from {a.inspector.department.name}
-                          </span>
+                  {team.map((a) => {
+                    const start = (a.mobDate ?? job.startDate).slice(0, 10);
+                    const end = (a.demobDate ?? job.endDate).slice(0, 10);
+                    return (
+                      <li key={a.id} className="font-medium">
+                        <Link to={`/inspectors/${a.inspector.id}`} className="text-teal hover:underline">
+                          {a.inspector.name}
+                        </Link>
+                        <span className="text-slate-500 font-normal">
+                          {' '}
+                          ({a.inspector.employeeNo}) — {a.role} · {start} – {end}
+                          {a.dailyBillableUsd != null ? ` · ${formatMoney(a.dailyBillableUsd)}/day` : ''}
+                          {' · '}
+                        </span>
+                        <span className="badge bg-slate-100">
+                          {a.status === 'PendingAcceptance' ? 'Active' : a.status}
+                        </span>
+                        {a.inspector.qeApproved ? (
+                          <span className="badge bg-teal/10 text-teal ml-2">QE approved</span>
+                        ) : (
+                          <span className="badge bg-slate-100 text-slate-500 ml-2">Not QE-approved</span>
                         )}
-                    </li>
-                  ))}
+                        {a.inspector.department &&
+                          a.inspector.department.id !== job.department.id && (
+                            <span className="badge bg-amber-100 text-amber-900 ml-2">
+                              Borrowed from {a.inspector.department.name}
+                            </span>
+                          )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
               {isCrossDeptAssignment(job) && (

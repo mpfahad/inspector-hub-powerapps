@@ -193,6 +193,7 @@ export async function assignInspector(
     agreedPriceUsd?: number | null;
     mobDate?: string;
     demobDate?: string;
+    dayRateUsd?: number | null;
     allowOverfill?: boolean;
   }
 ) {
@@ -233,7 +234,10 @@ export async function assignInspector(
   /** Freeze inspector rates onto the assignment so later CTC edits do not rewrite past cost (CM-013). */
   const costSnapshot = {
     dailyCostUsd: inspector.dailyCostUsd ?? null,
-    dailyBillableUsd: inspector.dailyBillableUsd ?? null,
+    dailyBillableUsd:
+      options?.dayRateUsd !== undefined && options.dayRateUsd !== null
+        ? options.dayRateUsd
+        : inspector.dailyBillableUsd ?? null,
   };
 
   const existingForInspector = job.assignments.find(

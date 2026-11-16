@@ -58,6 +58,7 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 | CM-029 | 2026-11-16 | **Live Docker pack** for other PC beside Training Manager / Contract App: production API + nginx web images; compose with persistent SQLite volume; **no seed on start**; runbook to import UAT DB. | Stakeholder | Implemented | 2026-11-16: `docker-compose.yml` (ports 5180/4100); `server/Dockerfile` + `docker-entrypoint.sh` (`prisma db push` only); `app/Dockerfile` + `nginx.conf` (`/api` proxy); optional `--profile seed`; [`.env.example`](../.env.example); runbook [`docs/DOCKER-LIVE.md`](./DOCKER-LIVE.md). Keep using `docker-compose.dev.yml` only for wipe-ok local hot reload. **Fix:** `COOKIE_SECURE=false` now honored under `NODE_ENV=production` (LAN HTTP login was succeeding then dropping the Secure cookie with no error). |
 | CM-030 | 2026-11-16 | **Settings:** Admin can **add/edit departments** (name, code, manager email). User management has a **search box** (name, email, role, department). | Stakeholder | Implemented | 2026-11-16: `POST/PUT /api/departments` (Admin); Settings Departments card + user list filter. |
 | CM-031 | 2026-11-16 | **Settings:** select + **delete** for departments and users (bulk). Safe guards: no self-delete, protect primary Admin / last Admin; block dept delete when inspectors/jobs/job types remain; HOLD protected. | Stakeholder | Implemented | 2026-11-16: `POST /api/users/bulk-delete`, `POST /api/departments/bulk-delete` (+ single DELETE); Settings checkboxes + Delete actions. |
+| CM-032 | 2026-11-16 | **Dept delete** only blocked by **open jobs**; inspectors + closed jobs rehomed to HOLD; job types removed with the dept. Settings dept **name links** to workspace. **Job type Delete** (blocked only if open jobs use it). | Stakeholder | Implemented | 2026-11-16: cascade delete in `departments.ts`; `DELETE /api/job-types/:id`; Settings `Link` to `/d/:code/jobs`; Job types page Delete. |
 
 ---
 
@@ -70,4 +71,4 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 
 ---
 
-*Last updated: 2026-11-16 (CM-031 Settings select/delete users & departments)*
+*Last updated: 2026-11-16 (CM-032 dept delete + job type delete)*

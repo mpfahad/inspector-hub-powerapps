@@ -3,9 +3,12 @@ import { prisma } from '../lib/prisma.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { validateBody } from '../lib/validate.js';
 import { createJobTypeSchema, updateJobTypeSchema } from '../lib/schemas.js';
+import { recordAudit } from '../services/audit.js';
 
 const router = Router();
 router.use(authMiddleware);
+
+const OPEN_JOB_STATUSES = ['Draft', 'Proposed', 'PendingAcceptance', 'Active', 'Completed'] as const;
 
 const include = {
   department: true,
@@ -149,6 +152,40 @@ router.put('/:id', requireRole('Coordinator', 'Manager', 'Admin'), validateBody(
   }
 
   res.json(type);
+});
+
+router.delete('/:id', requireRole('Coordinator', 'Manager', 'Admin'), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Invalid id' });
+    return;
+  }
+  const existing = await prisma.jobType.findUnique({ where: { id } });
+  if (!existing) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  const openJobs = await prisma.job.count({
+    where: { jobTypeId: id, status: { in: [...OPEN_JOB_STATUSES] } },
+  });
+  if (openJobs > 0) {
+    res.status(409).json({
+      error: `Cannot delete: ${openJobs} open job(s) still use this type. Close or cancel them first.`,
+    });
+    return;
+  }
+  await prisma.$transaction(async (tx) => {
+    await tx.job.updateMany({ where: { jobTypeId: id }, data: { jobTypeId: null } });
+    await tx.jobType.delete({ where: { id } });
+  });
+  await recordAudit({
+    userId: req.user?.id,
+    action: 'jobType.delete',
+    entityType: 'JobType',
+    entityId: id,
+    payload: { code: existing.code, name: existing.name, departmentId: existing.departmentId },
+  });
+  res.json({ ok: true, id });
 });
 
 export default router;

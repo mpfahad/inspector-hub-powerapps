@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, type AppUserAccount, type Department } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -358,7 +359,7 @@ export function SettingsPage() {
     }
     if (
       !window.confirm(
-        `Delete ${ids.length} department(s)? Departments with inspectors, jobs, or job types cannot be removed.`
+        `Delete ${ids.length} department(s)? Open jobs must be closed/cancelled first. Inspectors and closed jobs move to Unassigned (HOLD); job types for this department are removed.`
       )
     ) {
       return;
@@ -495,7 +496,9 @@ export function SettingsPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
           <div>
             <h2 className="font-semibold text-navy">Departments</h2>
-            <p className="text-xs text-slate-500">Add or edit department name, code, and manager email</p>
+            <p className="text-xs text-slate-500">
+              Click a name to open that department. Delete only blocked when open jobs remain.
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -606,7 +609,18 @@ export function SettingsPage() {
                       aria-label={`Select ${d.name}`}
                     />
                   </td>
-                  <td className="p-3 font-medium text-navy">{d.name}</td>
+                  <td className="p-3">
+                    {d.code.toUpperCase() === 'HOLD' ? (
+                      <span className="font-medium text-navy">{d.name}</span>
+                    ) : (
+                      <Link
+                        to={`/d/${encodeURIComponent(d.code)}/jobs`}
+                        className="font-medium text-teal hover:underline"
+                      >
+                        {d.name}
+                      </Link>
+                    )}
+                  </td>
                   <td className="p-3 font-mono text-slate-600">{d.code}</td>
                   <td className="p-3 text-slate-600">{d.managerEmail || '—'}</td>
                   <td className="p-3 text-right">

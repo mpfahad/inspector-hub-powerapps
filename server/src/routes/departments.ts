@@ -10,17 +10,50 @@ import {
 import { validateBody } from '../lib/validate.js';
 import { recordAudit } from '../services/audit.js';
 
-async function departmentDeleteBlockers(id: number) {
-  const [inspectors, jobs, jobTypes] = await Promise.all([
-    prisma.inspector.count({ where: { departmentId: id } }),
-    prisma.job.count({ where: { departmentId: id } }),
-    prisma.jobType.count({ where: { departmentId: id } }),
-  ]);
-  const reasons: string[] = [];
-  if (inspectors > 0) reasons.push(`${inspectors} inspector(s)`);
-  if (jobs > 0) reasons.push(`${jobs} job(s)`);
-  if (jobTypes > 0) reasons.push(`${jobTypes} job type(s)`);
-  return reasons;
+/** Open = not yet terminal. Closed/Cancelled history can be rehomed to HOLD. */
+const OPEN_JOB_STATUSES = ['Draft', 'Proposed', 'PendingAcceptance', 'Active', 'Completed'] as const;
+
+async function countOpenJobs(departmentId: number) {
+  return prisma.job.count({
+    where: { departmentId, status: { in: [...OPEN_JOB_STATUSES] } },
+  });
+}
+
+async function ensureHoldDepartment() {
+  const existing = await prisma.department.findUnique({ where: { code: 'HOLD' } });
+  if (existing) return existing;
+  return prisma.department.create({
+    data: { name: 'Unassigned', code: 'HOLD', managerEmail: null },
+  });
+}
+
+/** Rehome inspectors + closed jobs to HOLD, drop job types, then delete the department. */
+async function deleteDepartmentCascade(id: number) {
+  const hold = await ensureHoldDepartment();
+  if (hold.id === id) {
+    throw new Error('HOLD_PROTECTED');
+  }
+  const open = await countOpenJobs(id);
+  if (open > 0) {
+    throw new Error(`OPEN_JOBS:${open}`);
+  }
+
+  const typeIds = (
+    await prisma.jobType.findMany({ where: { departmentId: id }, select: { id: true } })
+  ).map((t) => t.id);
+
+  await prisma.$transaction(async (tx) => {
+    if (typeIds.length > 0) {
+      await tx.job.updateMany({
+        where: { jobTypeId: { in: typeIds } },
+        data: { jobTypeId: null },
+      });
+      await tx.jobType.deleteMany({ where: { id: { in: typeIds } } });
+    }
+    await tx.job.updateMany({ where: { departmentId: id }, data: { departmentId: hold.id } });
+    await tx.inspector.updateMany({ where: { departmentId: id }, data: { departmentId: hold.id } });
+    await tx.department.delete({ where: { id } });
+  });
 }
 
 const router = Router();
@@ -156,16 +189,21 @@ router.post('/bulk-delete', requireRole('Admin'), validateBody(deleteDepartments
       errors.push({ id, error: 'The HOLD department cannot be deleted' });
       continue;
     }
-    const blockers = await departmentDeleteBlockers(id);
-    if (blockers.length > 0) {
-      errors.push({
-        id,
-        error: `Cannot delete ${existing.code}: still has ${blockers.join(', ')}`,
-      });
-      continue;
+    try {
+      await deleteDepartmentCascade(id);
+      deleted.push({ id: existing.id, code: existing.code, name: existing.name });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.startsWith('OPEN_JOBS:')) {
+        const n = msg.slice('OPEN_JOBS:'.length);
+        errors.push({
+          id,
+          error: `Cannot delete ${existing.code}: still has ${n} open job(s). Close or cancel them first.`,
+        });
+      } else {
+        errors.push({ id, error: msg || 'Delete failed' });
+      }
     }
-    await prisma.department.delete({ where: { id } });
-    deleted.push({ id: existing.id, code: existing.code, name: existing.name });
   }
 
   if (deleted.length > 0) {
@@ -195,14 +233,20 @@ router.delete('/:id', requireRole('Admin'), async (req, res) => {
     res.status(409).json({ error: 'The HOLD department cannot be deleted' });
     return;
   }
-  const blockers = await departmentDeleteBlockers(id);
-  if (blockers.length > 0) {
-    res.status(409).json({
-      error: `Cannot delete ${existing.code}: still has ${blockers.join(', ')}`,
-    });
+  try {
+    await deleteDepartmentCascade(id);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.startsWith('OPEN_JOBS:')) {
+      const n = msg.slice('OPEN_JOBS:'.length);
+      res.status(409).json({
+        error: `Cannot delete ${existing.code}: still has ${n} open job(s). Close or cancel them first.`,
+      });
+      return;
+    }
+    res.status(500).json({ error: msg || 'Delete failed' });
     return;
   }
-  await prisma.department.delete({ where: { id } });
   await recordAudit({
     userId: req.user?.id,
     action: 'department.delete',

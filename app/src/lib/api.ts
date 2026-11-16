@@ -37,7 +37,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     }
     throw new Error(message);
   }
-  return res.json() as Promise<T>;
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 export async function checkApiHealth(): Promise<boolean> {
@@ -165,6 +168,8 @@ export const api = {
     request<JobType>('/api/job-types', { method: 'POST', body: JSON.stringify(data) }),
   updateJobType: (id: number, data: Partial<JobTypePayload> & { active?: boolean }) =>
     request<JobType>(`/api/job-types/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteJobType: (id: number) =>
+    request<{ ok: boolean; id: number }>(`/api/job-types/${id}`, { method: 'DELETE' }),
   myAssignments: () =>
     request<{ pending: Assignment[]; pendingQe: Assignment[]; active: Assignment[]; completed: Assignment[] }>(
       '/api/assignments/mine'

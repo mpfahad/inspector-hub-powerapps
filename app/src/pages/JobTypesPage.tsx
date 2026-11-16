@@ -152,6 +152,8 @@ export function JobTypesPage() {
   const [editForm, setEditForm] = useState<JobTypeForm>(emptyForm);
   const [editError, setEditError] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [listError, setListError] = useState('');
   const editCardRef = useRef<HTMLDivElement | null>(null);
 
   const [qualCode, setQualCode] = useState('');
@@ -243,6 +245,27 @@ export function JobTypesPage() {
     }
   };
 
+  const deleteType = async (type: JobType) => {
+    if (
+      !window.confirm(
+        `Delete job type ${type.code}? Open jobs using it must be closed/cancelled first. Closed jobs keep history with the type cleared.`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(type.id);
+    setListError('');
+    try {
+      await api.deleteJobType(type.id);
+      if (editingId === type.id) cancelEdit();
+      await load();
+    } catch (err) {
+      setListError(err instanceof Error ? err.message : 'Could not delete job type');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const addQualification = async () => {
     setQualError('');
     if (!qualCode.trim() || !qualName.trim()) {
@@ -328,6 +351,8 @@ export function JobTypesPage() {
               />
             </div>
           )}
+
+          {listError && <p className="text-sm text-red-600">{listError}</p>}
 
           <div className="card p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
@@ -437,13 +462,23 @@ export function JobTypesPage() {
                         )}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="btn-secondary text-xs shrink-0"
-                      onClick={() => startEdit(type)}
-                    >
-                      Edit
-                    </button>
+                    <div className="flex flex-col gap-2 shrink-0">
+                      <button
+                        type="button"
+                        className="btn-secondary text-xs"
+                        onClick={() => startEdit(type)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary text-xs text-red-700 border-red-200"
+                        disabled={deletingId === type.id}
+                        onClick={() => deleteType(type)}
+                      >
+                        {deletingId === type.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

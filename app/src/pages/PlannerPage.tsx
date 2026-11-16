@@ -69,12 +69,14 @@ function AllocationBar({
   const icon = allocation.kind === 'leave' ? '✈' : allocation.kind === 'training' ? '🎓' : '📋';
   const half = allocation.kind === 'job' && isHalfDayBooked(allocation.hoursPerDay);
   const className = `absolute rounded-md text-[11px] font-medium px-2 flex items-center gap-1 shadow-sm border truncate z-[1] ${KIND_STYLES[allocation.kind]}`;
+  // Half-day jobs: full height, half the horizontal span (left-aligned in the day range).
   const style: CSSProperties = {
     left: `calc(${(offset / total) * 100}% + 2px)`,
-    width: `calc(${(span / total) * 100}% - 4px)`,
-    ...(half
-      ? { top: '50%', bottom: '4px' }
-      : { top: '6px', bottom: '6px' }),
+    width: half
+      ? `calc(${(span / total) * 50}% - 4px)`
+      : `calc(${(span / total) * 100}% - 4px)`,
+    top: '6px',
+    bottom: '6px',
   };
   const title = `${allocation.title}${allocation.ref ? ` (${allocation.ref})` : ''}\n${allocation.start} → ${allocation.end} · ${allocation.hoursPerDay}h/day${
     half ? ` (half day <${HALF_DAY_HOURS}h)` : ''
@@ -167,7 +169,7 @@ function TimelineGrid({ data, deptPath }: { data: PlannerData; deptPath: (suffix
                         >
                           {half && (
                             <div
-                              className="absolute inset-x-0 bottom-0 h-1/2 bg-amber-200/70 border-t border-amber-300/80 pointer-events-none"
+                              className="absolute inset-y-0 left-0 w-1/2 bg-amber-200/70 border-r border-amber-300/80 pointer-events-none"
                               aria-hidden
                             />
                           )}

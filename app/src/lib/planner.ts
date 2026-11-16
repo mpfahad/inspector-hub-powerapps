@@ -1,6 +1,6 @@
 import type { PlannerAllocation, PlannerConflict, UtilizationBand } from './api';
 
-/** Booked hours below this render as a half-height bar on the planner day cell. */
+/** Booked hours below this render as a half-width bar on the planner (full height). */
 export const HALF_DAY_HOURS = 6;
 
 export const BAND_STYLES: Record<

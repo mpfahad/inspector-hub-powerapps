@@ -218,6 +218,14 @@ export const api = {
     id: number,
     data: { name?: string; code?: string; managerEmail?: string | null }
   ) => request<Department>(`/api/departments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteDepartments: (departmentIds: number[]) =>
+    request<{
+      deleted: { id: number; code: string; name: string }[];
+      errors: { id: number; error: string }[];
+    }>('/api/departments/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ departmentIds }),
+    }),
   users: () => request<AppUserAccount[]>('/api/users'),
   createUser: (data: {
     email: string;
@@ -235,6 +243,11 @@ export const api = {
       departmentIds?: number[];
     }
   ) => request<AppUserAccount>(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteUsers: (userIds: number[]) =>
+    request<{
+      deleted: { id: number; email: string; fullName: string }[];
+      errors: { id: number; error: string }[];
+    }>('/api/users/bulk-delete', { method: 'POST', body: JSON.stringify({ userIds }) }),
   bulkImportUsers: (data: {
     users: {
       email: string;

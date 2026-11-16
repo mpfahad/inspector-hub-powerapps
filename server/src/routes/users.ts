@@ -6,6 +6,7 @@ import { authMiddleware, requireRole } from '../middleware/auth.js';
 import {
   bulkImportUsersSchema,
   createUserSchema,
+  deleteUsersSchema,
   resetPasswordsSchema,
   updateUserSchema,
 } from '../lib/schemas.js';
@@ -16,8 +17,29 @@ const router = Router();
 router.use(authMiddleware);
 router.use(requireRole('Admin'));
 
+const PRIMARY_ADMIN_EMAIL = 'fahad.mp@applus.com';
+
 function randomTempPassword() {
   return randomBytes(9).toString('base64url').slice(0, 12);
+}
+
+async function userDeleteGuard(
+  target: { id: number; email: string; role: string },
+  actorId: number | undefined
+): Promise<string | null> {
+  if (actorId !== undefined && target.id === actorId) {
+    return 'You cannot delete your own account';
+  }
+  if (target.email.toLowerCase() === PRIMARY_ADMIN_EMAIL) {
+    return 'The primary Admin account cannot be deleted';
+  }
+  if (target.role === 'Admin') {
+    const adminCount = await prisma.user.count({ where: { role: 'Admin' } });
+    if (adminCount <= 1) {
+      return 'Cannot delete the last Admin account';
+    }
+  }
+  return null;
 }
 
 const userSelect = {
@@ -334,6 +356,74 @@ router.post('/reset-passwords', validateBody(resetPasswordsSchema), async (req, 
   });
 
   res.json({ items });
+});
+
+router.post('/bulk-delete', validateBody(deleteUsersSchema), async (req, res) => {
+  const { userIds } = req.body as { userIds: number[] };
+  const deleted: { id: number; email: string; fullName: string }[] = [];
+  const errors: { id: number; error: string }[] = [];
+  const actorId = req.user?.id;
+
+  for (const id of userIds) {
+    const existing = await prisma.user.findUnique({ where: { id } });
+    if (!existing) {
+      errors.push({ id, error: 'Not found' });
+      continue;
+    }
+    const blocked = await userDeleteGuard(existing, actorId);
+    if (blocked) {
+      errors.push({ id, error: blocked });
+      continue;
+    }
+    await prisma.$transaction([
+      prisma.inspector.updateMany({ where: { userId: id }, data: { userId: null } }),
+      prisma.auditEvent.updateMany({ where: { userId: id }, data: { userId: null } }),
+      prisma.user.delete({ where: { id } }),
+    ]);
+    deleted.push({ id: existing.id, email: existing.email, fullName: existing.fullName });
+  }
+
+  if (deleted.length > 0) {
+    await recordAudit({
+      userId: actorId,
+      action: 'user.bulk_delete',
+      entityType: 'User',
+      payload: { deleted, errors },
+    });
+  }
+
+  res.json({ deleted, errors });
+});
+
+router.delete('/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Invalid id' });
+    return;
+  }
+  const existing = await prisma.user.findUnique({ where: { id } });
+  if (!existing) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  const blocked = await userDeleteGuard(existing, req.user?.id);
+  if (blocked) {
+    res.status(409).json({ error: blocked });
+    return;
+  }
+  await prisma.$transaction([
+    prisma.inspector.updateMany({ where: { userId: id }, data: { userId: null } }),
+    prisma.auditEvent.updateMany({ where: { userId: id }, data: { userId: null } }),
+    prisma.user.delete({ where: { id } }),
+  ]);
+  await recordAudit({
+    userId: req.user?.id,
+    action: 'user.delete',
+    entityType: 'User',
+    entityId: id,
+    payload: { email: existing.email, fullName: existing.fullName },
+  });
+  res.status(204).send();
 });
 
 export default router;

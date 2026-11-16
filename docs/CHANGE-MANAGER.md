@@ -57,6 +57,7 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 | CM-028 | 2026-11-16 | **Browser tab title** shows product name **Inspection Hub** (not generic “app”). | Stakeholder | Implemented | 2026-11-16: `app/index.html` + `document.title` in `main.tsx`. |
 | CM-029 | 2026-11-16 | **Live Docker pack** for other PC beside Training Manager / Contract App: production API + nginx web images; compose with persistent SQLite volume; **no seed on start**; runbook to import UAT DB. | Stakeholder | Implemented | 2026-11-16: `docker-compose.yml` (ports 5180/4100); `server/Dockerfile` + `docker-entrypoint.sh` (`prisma db push` only); `app/Dockerfile` + `nginx.conf` (`/api` proxy); optional `--profile seed`; [`.env.example`](../.env.example); runbook [`docs/DOCKER-LIVE.md`](./DOCKER-LIVE.md). Keep using `docker-compose.dev.yml` only for wipe-ok local hot reload. **Fix:** `COOKIE_SECURE=false` now honored under `NODE_ENV=production` (LAN HTTP login was succeeding then dropping the Secure cookie with no error). |
 | CM-030 | 2026-11-16 | **Settings:** Admin can **add/edit departments** (name, code, manager email). User management has a **search box** (name, email, role, department). | Stakeholder | Implemented | 2026-11-16: `POST/PUT /api/departments` (Admin); Settings Departments card + user list filter. |
+| CM-031 | 2026-11-16 | **Settings:** select + **delete** for departments and users (bulk). Safe guards: no self-delete, protect primary Admin / last Admin; block dept delete when inspectors/jobs/job types remain; HOLD protected. | Stakeholder | Implemented | 2026-11-16: `POST /api/users/bulk-delete`, `POST /api/departments/bulk-delete` (+ single DELETE); Settings checkboxes + Delete actions. |
 
 ---
 
@@ -69,4 +70,4 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 
 ---
 
-*Last updated: 2026-11-16 (CM-030 Settings departments + user search)*
+*Last updated: 2026-11-16 (CM-031 Settings select/delete users & departments)*

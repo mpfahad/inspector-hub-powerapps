@@ -112,6 +112,7 @@ export function SettingsPage() {
   const [showDeptForm, setShowDeptForm] = useState(false);
   const [editingDeptId, setEditingDeptId] = useState<number | null>(null);
   const [deptForm, setDeptForm] = useState<DeptFormState>(emptyDeptForm());
+  const [selectedDepts, setSelectedDepts] = useState<Set<number>>(new Set());
 
   const load = () => {
     if (!isAdmin) return;
@@ -119,6 +120,8 @@ export function SettingsPage() {
       .then(([u, d]) => {
         setUsers(u);
         setDepartments(d);
+        setSelected(new Set());
+        setSelectedDepts(new Set());
         setError('');
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load users'));
@@ -152,6 +155,11 @@ export function SettingsPage() {
   const allSelected = useMemo(
     () => filteredUsers.length > 0 && filteredUsers.every((u) => selected.has(u.id)),
     [filteredUsers, selected]
+  );
+
+  const allDeptsSelected = useMemo(
+    () => departments.length > 0 && departments.every((d) => selectedDepts.has(d.id)),
+    [departments, selectedDepts]
   );
 
   if (!isAdmin) {
@@ -313,6 +321,64 @@ export function SettingsPage() {
     }
   };
 
+  const deleteSelectedUsers = async () => {
+    const ids = [...selected];
+    if (ids.length === 0) {
+      setError('Select one or more users first.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Delete ${ids.length} user account(s)? Linked inspector profiles stay; only the login is removed.`
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const res = await api.deleteUsers(ids);
+      if (res.errors.length) {
+        setError(res.errors.map((e) => e.error).join('; '));
+      }
+      setSelected(new Set());
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete users');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteSelectedDepartments = async () => {
+    const ids = [...selectedDepts];
+    if (ids.length === 0) {
+      setError('Select one or more departments first.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Delete ${ids.length} department(s)? Departments with inspectors, jobs, or job types cannot be removed.`
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const res = await api.deleteDepartments(ids);
+      if (res.errors.length) {
+        setError(res.errors.map((e) => e.error).join('; '));
+      }
+      setSelectedDepts(new Set());
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete departments');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const exportPasswords = () => {
     if (passwordExport.length === 0) return;
     downloadCsv('inspection-hub-temp-passwords.csv', [
@@ -431,9 +497,19 @@ export function SettingsPage() {
             <h2 className="font-semibold text-navy">Departments</h2>
             <p className="text-xs text-slate-500">Add or edit department name, code, and manager email</p>
           </div>
-          <button type="button" className="btn-primary text-sm" onClick={openCreateDept}>
-            Add department
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-secondary text-sm text-red-700 border-red-200"
+              disabled={saving || selectedDepts.size === 0}
+              onClick={deleteSelectedDepartments}
+            >
+              Delete ({selectedDepts.size})
+            </button>
+            <button type="button" className="btn-primary text-sm" onClick={openCreateDept}>
+              Add department
+            </button>
+          </div>
         </div>
 
         {showDeptForm && (
@@ -495,6 +571,17 @@ export function SettingsPage() {
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase text-slate-500 border-b border-slate-100">
               <tr>
+                <th className="p-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allDeptsSelected}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedDepts(new Set(departments.map((d) => d.id)));
+                      else setSelectedDepts(new Set());
+                    }}
+                    aria-label="Select all departments"
+                  />
+                </th>
                 <th className="p-3">Name</th>
                 <th className="p-3">Code</th>
                 <th className="p-3">Manager</th>
@@ -504,6 +591,21 @@ export function SettingsPage() {
             <tbody>
               {departments.map((d) => (
                 <tr key={d.id} className="border-t border-slate-50">
+                  <td className="p-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedDepts.has(d.id)}
+                      onChange={(e) => {
+                        setSelectedDepts((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(d.id);
+                          else next.delete(d.id);
+                          return next;
+                        });
+                      }}
+                      aria-label={`Select ${d.name}`}
+                    />
+                  </td>
                   <td className="p-3 font-medium text-navy">{d.name}</td>
                   <td className="p-3 font-mono text-slate-600">{d.code}</td>
                   <td className="p-3 text-slate-600">{d.managerEmail || '—'}</td>
@@ -520,7 +622,7 @@ export function SettingsPage() {
               ))}
               {departments.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="p-4 text-sm text-slate-500">
+                  <td colSpan={5} className="p-4 text-sm text-slate-500">
                     No departments yet. Add one to get started.
                   </td>
                 </tr>
@@ -557,6 +659,14 @@ export function SettingsPage() {
               onClick={resetSelectedPasswords}
             >
               Reset passwords ({selected.size})
+            </button>
+            <button
+              type="button"
+              className="btn-secondary text-sm text-red-700 border-red-200"
+              disabled={saving || selected.size === 0}
+              onClick={deleteSelectedUsers}
+            >
+              Delete ({selected.size})
             </button>
             <button type="button" className="btn-primary text-sm" onClick={openCreate}>
               Add user

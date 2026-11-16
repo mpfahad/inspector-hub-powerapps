@@ -79,6 +79,10 @@ export const resetPasswordsSchema = z.object({
   userIds: z.array(z.coerce.number().int().positive()).min(1).max(200),
 });
 
+export const deleteUsersSchema = z.object({
+  userIds: z.array(z.coerce.number().int().positive()).min(1).max(200),
+});
+
 export const createDepartmentSchema = z.object({
   name: z.string().trim().min(1).max(120),
   code: z.string().trim().min(1).max(20),
@@ -89,6 +93,10 @@ export const updateDepartmentSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   code: z.string().trim().min(1).max(20).optional(),
   managerEmail: z.string().trim().email().max(320).optional().nullable(),
+});
+
+export const deleteDepartmentsSchema = z.object({
+  departmentIds: z.array(z.coerce.number().int().positive()).min(1).max(100),
 });
 
 export const updateJobSchema = z.object({

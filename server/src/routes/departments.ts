@@ -2,9 +2,26 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { STAFF_ROLES } from '../services/authz.js';
-import { createDepartmentSchema, updateDepartmentSchema } from '../lib/schemas.js';
+import {
+  createDepartmentSchema,
+  deleteDepartmentsSchema,
+  updateDepartmentSchema,
+} from '../lib/schemas.js';
 import { validateBody } from '../lib/validate.js';
 import { recordAudit } from '../services/audit.js';
+
+async function departmentDeleteBlockers(id: number) {
+  const [inspectors, jobs, jobTypes] = await Promise.all([
+    prisma.inspector.count({ where: { departmentId: id } }),
+    prisma.job.count({ where: { departmentId: id } }),
+    prisma.jobType.count({ where: { departmentId: id } }),
+  ]);
+  const reasons: string[] = [];
+  if (inspectors > 0) reasons.push(`${inspectors} inspector(s)`);
+  if (jobs > 0) reasons.push(`${jobs} job(s)`);
+  if (jobTypes > 0) reasons.push(`${jobTypes} job type(s)`);
+  return reasons;
+}
 
 const router = Router();
 router.use(authMiddleware);
@@ -122,6 +139,78 @@ router.put('/:id', requireRole('Admin'), validateBody(updateDepartmentSchema), a
     payload: data,
   });
   res.json(updated);
+});
+
+router.post('/bulk-delete', requireRole('Admin'), validateBody(deleteDepartmentsSchema), async (req, res) => {
+  const { departmentIds } = req.body as { departmentIds: number[] };
+  const deleted: { id: number; code: string; name: string }[] = [];
+  const errors: { id: number; error: string }[] = [];
+
+  for (const id of departmentIds) {
+    const existing = await prisma.department.findUnique({ where: { id } });
+    if (!existing) {
+      errors.push({ id, error: 'Not found' });
+      continue;
+    }
+    if (existing.code.toUpperCase() === 'HOLD') {
+      errors.push({ id, error: 'The HOLD department cannot be deleted' });
+      continue;
+    }
+    const blockers = await departmentDeleteBlockers(id);
+    if (blockers.length > 0) {
+      errors.push({
+        id,
+        error: `Cannot delete ${existing.code}: still has ${blockers.join(', ')}`,
+      });
+      continue;
+    }
+    await prisma.department.delete({ where: { id } });
+    deleted.push({ id: existing.id, code: existing.code, name: existing.name });
+  }
+
+  if (deleted.length > 0) {
+    await recordAudit({
+      userId: req.user?.id,
+      action: 'department.bulk_delete',
+      entityType: 'Department',
+      payload: { deleted, errors },
+    });
+  }
+
+  res.json({ deleted, errors });
+});
+
+router.delete('/:id', requireRole('Admin'), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Invalid id' });
+    return;
+  }
+  const existing = await prisma.department.findUnique({ where: { id } });
+  if (!existing) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  if (existing.code.toUpperCase() === 'HOLD') {
+    res.status(409).json({ error: 'The HOLD department cannot be deleted' });
+    return;
+  }
+  const blockers = await departmentDeleteBlockers(id);
+  if (blockers.length > 0) {
+    res.status(409).json({
+      error: `Cannot delete ${existing.code}: still has ${blockers.join(', ')}`,
+    });
+    return;
+  }
+  await prisma.department.delete({ where: { id } });
+  await recordAudit({
+    userId: req.user?.id,
+    action: 'department.delete',
+    entityType: 'Department',
+    entityId: id,
+    payload: { code: existing.code, name: existing.name },
+  });
+  res.status(204).send();
 });
 
 export default router;

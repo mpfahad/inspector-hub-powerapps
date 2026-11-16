@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"npm run dev --prefix server\" \"npx wait-on http://localhost:4100/api/health -t 60000 && npm run dev --prefix app\"",
     "dev:docker": "docker compose -f docker-compose.dev.yml up --build",
+    "docker:live": "docker compose --env-file .env up -d --build",
+    "docker:live:down": "docker compose down",
     "db:seed": "npm run db:seed --prefix server",
     "db:push": "npm run db:push --prefix server"
   },

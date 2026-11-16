@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type PlannerAllocation, type PlannerData } from '../lib/api';
 import { useDepartment } from '../context/DepartmentContext';
@@ -8,7 +8,9 @@ import {
   conflictClass,
   conflictLabel,
   fmtRange,
+  HALF_DAY_HOURS,
   initials,
+  isHalfDayBooked,
   isWeekend,
   KIND_STYLES,
 } from '../lib/planner';
@@ -65,12 +67,18 @@ function AllocationBar({
   deptPath: (suffix?: string) => string;
 }) {
   const icon = allocation.kind === 'leave' ? '✈' : allocation.kind === 'training' ? '🎓' : '📋';
-  const className = `absolute top-1.5 bottom-1.5 rounded-md text-[11px] font-medium px-2 flex items-center gap-1 shadow-sm border truncate ${KIND_STYLES[allocation.kind]}`;
-  const style = {
+  const half = allocation.kind === 'job' && isHalfDayBooked(allocation.hoursPerDay);
+  const className = `absolute rounded-md text-[11px] font-medium px-2 flex items-center gap-1 shadow-sm border truncate z-[1] ${KIND_STYLES[allocation.kind]}`;
+  const style: CSSProperties = {
     left: `calc(${(offset / total) * 100}% + 2px)`,
     width: `calc(${(span / total) * 100}% - 4px)`,
+    ...(half
+      ? { top: '50%', bottom: '4px' }
+      : { top: '6px', bottom: '6px' }),
   };
-  const title = `${allocation.title}${allocation.ref ? ` (${allocation.ref})` : ''}\n${allocation.start} → ${allocation.end} · ${allocation.hoursPerDay}h/day${allocation.location ? `\n${allocation.location}` : ''}`;
+  const title = `${allocation.title}${allocation.ref ? ` (${allocation.ref})` : ''}\n${allocation.start} → ${allocation.end} · ${allocation.hoursPerDay}h/day${
+    half ? ` (half day <${HALF_DAY_HOURS}h)` : ''
+  }${allocation.location ? `\n${allocation.location}` : ''}`;
 
   if (allocation.kind === 'job' && allocation.jobId) {
     return (
@@ -137,18 +145,40 @@ function TimelineGrid({ data, deptPath }: { data: PlannerData; deptPath: (suffix
                       <div className="text-[10px] text-slate-500">
                         {row.department} · {row.utilization}% util
                       </div>
+                      <div className="text-[10px] text-slate-400 tabular-nums">
+                        {row.dayBands.reduce((s, b) => s + (b.hours || 0), 0)}h booked
+                        {row.weeklyCapacityHrs != null ? ` / ${row.weeklyCapacityHrs}h cap` : ''}
+                      </div>
                     </div>
                   </div>
                   <div
                     className="relative grid min-h-[56px]"
                     style={{ gridTemplateColumns: `repeat(${data.days.length}, minmax(0, 1fr))` }}
                   >
-                    {row.dayBands.map(({ date, band }) => (
-                      <div
-                        key={date}
-                        className={`h-14 border-r border-slate-100 last:border-r-0 ${isWeekend(date) ? 'bg-slate-50/60' : ''} ${BAND_STYLES[band].cell}`}
-                      />
-                    ))}
+                    {row.dayBands.map(({ date, band, hours }) => {
+                      const half = isHalfDayBooked(hours);
+                      return (
+                        <div
+                          key={date}
+                          title={`${date}: ${hours}h — ${BAND_STYLES[band].label}`}
+                          className={`h-14 border-r border-slate-100 last:border-r-0 relative ${isWeekend(date) ? 'bg-slate-50/60' : ''} ${
+                            half ? '' : BAND_STYLES[band].cell
+                          }`}
+                        >
+                          {half && (
+                            <div
+                              className="absolute inset-x-0 bottom-0 h-1/2 bg-amber-200/70 border-t border-amber-300/80 pointer-events-none"
+                              aria-hidden
+                            />
+                          )}
+                          {hours > 0 && (
+                            <span className="absolute bottom-0.5 inset-x-0 text-center text-[9px] font-medium text-slate-600 tabular-nums pointer-events-none z-[2]">
+                              {hours}h
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                     {items.map((a) => {
                       const aStart = a.start < startIso ? startIso : a.start;
                       const aEnd = a.end > endIso ? endIso : a.end;

@@ -35,25 +35,26 @@ async function main() {
   await prisma.department.deleteMany();
   await prisma.user.deleteMany();
 
-  const passwordHash = await bcrypt.hash('password123', 10);
+  const adminHash = await bcrypt.hash('ApplusHub2026!', 10);
+  const inspectorHash = await bcrypt.hash('password123', 10);
 
-  await prisma.user.createMany({
-    data: [
-      { email: 'coordinator@irppms.local', passwordHash, fullName: 'Alex Coordinator', role: UserRole.Coordinator, identityProvider: IdentityProvider.local },
-      { email: 'jordan.coord@irppms.local', passwordHash, fullName: 'Jordan Patel', role: UserRole.Coordinator, identityProvider: IdentityProvider.local },
-      { email: 'manager@irppms.local', passwordHash, fullName: 'Sarah Hollis', role: UserRole.Manager, identityProvider: IdentityProvider.local },
-      { email: 'marcus.mgr@irppms.local', passwordHash, fullName: 'Marcus Chen', role: UserRole.Manager, identityProvider: IdentityProvider.local },
-      { email: 'admin@irppms.local', passwordHash, fullName: 'System Admin', role: UserRole.Admin, identityProvider: IdentityProvider.local },
-    ],
+  await prisma.user.create({
+    data: {
+      email: 'fahad.mp@applus.com',
+      passwordHash: adminHash,
+      fullName: 'Fahad',
+      role: UserRole.Admin,
+      identityProvider: IdentityProvider.local,
+    },
   });
 
   const depts = await Promise.all([
-    prisma.department.create({ data: { name: 'Mechanical Inspection', code: 'MECH', managerEmail: 'manager@irppms.local' } }),
-    prisma.department.create({ data: { name: 'NDT Inspection', code: 'NDT', managerEmail: 'marcus.mgr@irppms.local' } }),
-    prisma.department.create({ data: { name: 'Electrical Inspection', code: 'ELEC', managerEmail: 'manager@irppms.local' } }),
-    prisma.department.create({ data: { name: 'Lifting', code: 'LIFT', managerEmail: 'manager@irppms.local' } }),
-    prisma.department.create({ data: { name: 'Rigs', code: 'RIGS', managerEmail: 'manager@irppms.local' } }),
-    prisma.department.create({ data: { name: 'Unassigned', code: 'HOLD', managerEmail: 'coordinator@irppms.local' } }),
+    prisma.department.create({ data: { name: 'Mechanical Inspection', code: 'MECH', managerEmail: 'fahad.mp@applus.com' } }),
+    prisma.department.create({ data: { name: 'NDT Inspection', code: 'NDT', managerEmail: 'fahad.mp@applus.com' } }),
+    prisma.department.create({ data: { name: 'Electrical Inspection', code: 'ELEC', managerEmail: 'fahad.mp@applus.com' } }),
+    prisma.department.create({ data: { name: 'Lifting', code: 'LIFT', managerEmail: 'fahad.mp@applus.com' } }),
+    prisma.department.create({ data: { name: 'Rigs', code: 'RIGS', managerEmail: 'fahad.mp@applus.com' } }),
+    prisma.department.create({ data: { name: 'Unassigned', code: 'HOLD', managerEmail: 'fahad.mp@applus.com' } }),
   ]);
   const liftingDept = depts[3];
 
@@ -182,7 +183,7 @@ async function main() {
     const user = await prisma.user.create({
       data: {
         email,
-        passwordHash,
+        passwordHash: inspectorHash,
         fullName: row.name,
         role: UserRole.Inspector,
         identityProvider: IdentityProvider.local,
@@ -218,7 +219,8 @@ async function main() {
   console.log('Seed complete (full wipe).');
   console.log(`Inspectors: ${FIELD_INSPECTOR_ROSTER.length} | Clients: ${QATAR_CLIENTS.length} | Cert catalog: ${CERTIFICATION_CATALOG.length}`);
   console.log(`QE-approved (QP Approved Inspector): ${qeCount}`);
-  console.log('All passwords: password123');
+  console.log('Admin: fahad.mp@applus.com / ApplusHub2026!');
+  console.log('Inspector logins (roster emails): password123');
   console.log('');
   console.log('Prefer live upsert without wipe: npx tsx prisma/import-roster.ts');
   console.log('Sample jobs for reports: npm run db:seed-sample-jobs');

@@ -24,7 +24,7 @@ function slotsFromJob(job: Job): TeamSlot[] {
   const need = requiredTeamSize(job);
   const open = openAssignments(job);
   const defaults = { startDate: ymd(job.startDate), endDate: ymd(job.endDate) };
-  const filled: TeamSlot[] = open.map((a, i) => ({
+  const filled: TeamSlot[] = open.map((a) => ({
     key: `asg-${a.id}`,
     assignmentId: a.id,
     inspectorId: String(a.inspector.id),
@@ -156,7 +156,17 @@ export function AssignInspectorModal({ job, open, onClose, onAssigned }: Props) 
             <p className="text-sm text-slate-500">Loading inspectors…</p>
           ) : (
             <>
-              <TeamSlotsEditor slots={slots} inspectors={inspectors} onChange={setSlots} disabled={busy} />
+              <TeamSlotsEditor
+                slots={slots}
+                inspectors={inspectors}
+                onChange={setSlots}
+                disabled={busy}
+                rateBasis={job.rateBasis === 'hourly' ? 'hourly' : 'day'}
+                hoursPerSlot={Math.max(
+                  0,
+                  Math.round((job.estimatedHours ?? 40) / Math.max(1, need))
+                )}
+              />
               <button type="button" className="btn-secondary text-sm" disabled={busy} onClick={addSlot}>
                 Add another row
               </button>

@@ -80,6 +80,19 @@ model User {
   createdAt        DateTime         @default(now())
   auditEvents      AuditEvent[]
   inspector        Inspector?
+  /// Empty = all departments (Admin default). Non-empty = CM-022 scoped dept cards/nav.
+  departmentAccess UserDepartmentAccess[]
+}
+
+model UserDepartmentAccess {
+  id           Int        @id @default(autoincrement())
+  userId       Int
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  departmentId Int
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, departmentId])
+  @@index([userId])
 }
 
 model Department {
@@ -90,6 +103,7 @@ model Department {
   inspectors     Inspector[]
   jobs           Job[]
   jobTypes       JobType[]
+  userAccess     UserDepartmentAccess[]
 }
 
 model Client {
@@ -235,6 +249,10 @@ model Job {
   priority              String   @default("Normal")
   estimatedHours        Float    @default(40)
   requiredInspectorCount Int     @default(1)
+  /// CM-024: when true, assigned jobs past endDate auto-close on API startup / sweep.
+  autoCompleteOnEndDate Boolean  @default(true)
+  /// CM-025: commercial rate basis for team rows — "day" | "hourly".
+  rateBasis             String   @default("day")
   /// When true, only inspectors with Inspector.qeApproved=true may be assigned (job goes Active immediately).
   requiresQeApproval    Boolean  @default(false)
   latitude              Float?

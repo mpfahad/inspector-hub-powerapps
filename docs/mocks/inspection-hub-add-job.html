@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inspection Hub — Add Job Mock (CM-024 / CM-025)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #0c2438;
+      --teal: #0d9488;
+      --teal-deep: #0f766e;
+      --muted: #64748b;
+      --line: #d0dbe6;
+      --card: #fff;
+      --sand: #e8eef2;
+      --amber-bg: #fffbeb;
+      --amber-bd: #fcd34d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "DM Sans", system-ui, sans-serif;
+      color: #0f172a;
+      background: linear-gradient(165deg, #f4f7fa, #e9eef3);
+      min-height: 100vh;
+    }
+    button, input, select, textarea { font: inherit; }
+    .shell { max-width: 920px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+    .crumb { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.75rem; }
+    .crumb a { color: var(--teal-deep); text-decoration: none; }
+    h1 {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-weight: 400;
+      font-size: 1.85rem;
+      color: var(--navy);
+      margin: 0 0 0.25rem;
+    }
+    .sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 1.25rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1.35rem 1.35rem 1.5rem;
+      box-shadow: 0 8px 28px rgba(12, 36, 56, 0.06);
+    }
+    .label { display: block; font-size: 0.72rem; font-weight: 600; color: var(--muted); margin-bottom: 0.35rem; }
+    .input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.55rem 0.7rem;
+      background: #fff;
+    }
+    .input:focus { outline: 2px solid rgba(13, 148, 136, 0.3); border-color: var(--teal); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.85rem; }
+    .stack > * + * { margin-top: 1rem; }
+    .hidden { display: none !important; }
+
+    /* Top control bar */
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+      padding: 0.85rem;
+      border-radius: 12px;
+      background: var(--sand);
+      border: 1px solid var(--line);
+    }
+    .control-group {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.65rem 0.7rem;
+    }
+    .control-group .title {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.45rem;
+    }
+    .seg {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+    }
+    .seg button {
+      flex: 1;
+      min-width: 0;
+      border: 1px solid var(--line);
+      background: #f8fafc;
+      color: var(--navy);
+      border-radius: 8px;
+      padding: 0.45rem 0.5rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .seg button.active {
+      background: var(--navy);
+      color: #fff;
+      border-color: var(--navy);
+    }
+    .control-hint {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 0.4rem;
+      line-height: 1.35;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border: none;
+      border-radius: 999px;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: #f1f5f9;
+      color: #475569;
+    }
+    .badge.on { background: rgba(13, 148, 136, 0.18); color: var(--teal-deep); }
+    .btn-primary {
+      border: none;
+      background: var(--navy);
+      color: #fff;
+      border-radius: 10px;
+      padding: 0.65rem 1.2rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-primary:hover { background: #14344d; }
+    .team-row {
+      display: grid;
+      grid-template-columns: 1.4fr 0.9fr 0.9fr 0.9fr 0.8fr;
+      gap: 0.5rem;
+      align-items: end;
+      padding: 0.75rem;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin-top: 0.5rem;
+      background: #fafbfc;
+    }
+    .row-total { font-weight: 600; color: var(--navy); font-size: 0.9rem; padding-bottom: 0.45rem; }
+    .row-total small { display: block; font-weight: 500; color: var(--muted); font-size: 0.7rem; }
+    .summary {
+      margin-top: 1rem;
+      padding: 0.75rem 0.9rem;
+      border-radius: 10px;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      font-size: 0.85rem;
+      color: #065f46;
+      line-height: 1.45;
+    }
+    .callout {
+      margin-top: 1rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .certs { display: flex; flex-wrap: gap: 0.35rem; }
+    .cert {
+      border: none;
+      border-radius: 999px;
+      padding: 0.3rem 0.6rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: #f1f5f9;
+      color: #475569;
+    }
+    .cert.on { background: rgba(13, 148, 136, 0.2); color: var(--teal-deep); }
+    @media (max-width: 800px) {
+      .controls, .grid-2, .grid-3, .team-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="crumb"><a href="inspection-hub-auth-depts.html">← Inspection Hub mock</a> · Lifting · Jobs · New</div>
+    <h1>New job</h1>
+    <p class="sub">Creating in <strong>Lifting</strong>. Top toggles set completion, team shape, and rate basis before the rest of the form.</p>
+
+    <form class="card stack" id="form" onsubmit="return onSubmit(event)">
+      <!-- TOP CONTROLS -->
+      <div class="controls" aria-label="Job mode">
+        <div class="control-group">
+          <div class="title">Completion</div>
+          <div class="seg" data-group="completion">
+            <button type="button" data-value="auto" class="active">Auto on end date</button>
+            <button type="button" data-value="manual">Manual complete</button>
+          </div>
+          <div class="control-hint" id="hint-completion">Job closes automatically when the end date passes.</div>
+        </div>
+        <div class="control-group">
+          <div class="title">Assignment</div>
+          <div class="seg" data-group="assignment">
+            <button type="button" data-value="single" class="active">Single</button>
+            <button type="button" data-value="team">Team</button>
+          </div>
+          <div class="control-hint" id="hint-assignment">One inspector for this job.</div>
+        </div>
+        <div class="control-group">
+          <div class="title">Rate basis</div>
+          <div class="seg" data-group="rate">
+            <button type="button" data-value="day" class="active">Day rate</button>
+            <button type="button" data-value="hourly">Hourly</button>
+          </div>
+          <div class="control-hint" id="hint-rate">Commercial rate charged per calendar day on site.</div>
+        </div>
+      </div>
+
+      <div>
+        <label class="label">Job type</label>
+        <select class="input" id="jobType">
+          <option>LIFT-EQ — Lifting Equipment Inspection</option>
+          <option>LIFT-CRANE — Crane Inspection</option>
+          <option>LIFT-RA — Rope Access Support</option>
+        </select>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label class="label">Job ref</label>
+          <input class="input" id="ref" value="J-2026-742" />
+        </div>
+        <div>
+          <label class="label">Priority</label>
+          <select class="input">
+            <option>Low</option>
+            <option selected>Normal</option>
+            <option>High</option>
+            <option>Critical</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="label">Title</label>
+        <input class="input" id="title" value="Lifting Equipment Inspection" />
+      </div>
+
+      <div>
+        <label class="label">Client</label>
+        <select class="input">
+          <option>GULF DRILLING</option>
+          <option>QatarEnergy LNG</option>
+          <option>Qatar Steel</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="label">Scope</label>
+        <textarea class="input" rows="2" placeholder="Scope notes…"></textarea>
+      </div>
+
+      <div>
+        <label class="label">Location</label>
+        <input class="input" placeholder="e.g. Ras Laffan, Offshore rig" value="Offshore — Client chopper" />
+      </div>
+
+      <div class="grid-3">
+        <div>
+          <label class="label">Job start</label>
+          <input class="input" type="date" id="start" value="2026-11-20" />
+        </div>
+        <div>
+          <label class="label">Job end</label>
+          <input class="input" type="date" id="end" value="2026-11-27" />
+        </div>
+        <div>
+          <label class="label" id="est-label">Est. hours</label>
+          <input class="input" type="number" id="est" value="40" />
+        </div>
+      </div>
+
+      <!-- TEAM SIZE (team mode) -->
+      <div id="block-pax">
+        <label class="label">Inspectors needed</label>
+        <div style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">
+          <button type="button" class="badge on" data-pax="1">1 PAX</button>
+          <button type="button" class="badge" data-pax="2">2 PAX</button>
+          <button type="button" class="badge" data-pax="3">3 PAX</button>
+          <button type="button" class="badge" data-pax="4">4 PAX</button>
+          <input class="input" style="width:4.5rem" type="number" min="1" max="20" id="paxCustom" value="1" />
+        </div>
+      </div>
+
+      <!-- ASSIGN TIMING -->
+      <div>
+        <label class="label">When to assign</label>
+        <div style="display:flex;flex-wrap:gap:0.4rem;margin-bottom:0.35rem">
+          <button type="button" class="badge on" data-when="later" id="when-later">Assign later</button>
+          <button type="button" class="badge" data-when="now" id="when-now">Assign now</button>
+        </div>
+        <p class="control-hint" id="hint-when" style="margin:0">Job opens as Proposed. Assign from the board when ready.</p>
+      </div>
+
+      <!-- SLOTS -->
+      <div id="block-slots" class="hidden">
+        <label class="label" id="slots-label">Inspector</label>
+        <div id="slots"></div>
+        <div style="margin-top:0.5rem;text-align:right;font-size:0.85rem;color:var(--muted)">
+          Team total (est.): <strong id="team-total" style="color:var(--navy)">QAR 0</strong>
+        </div>
+      </div>
+
+      <div>
+        <label class="label">Required qualifications</label>
+        <p class="control-hint" style="margin:0 0 0.4rem">Pre-filled from job type — adjust if needed</p>
+        <div class="certs" id="certs">
+          <button type="button" class="cert on">LEEA</button>
+          <button type="button" class="cert on">OPITO</button>
+          <button type="button" class="cert">IRATA-L1</button>
+          <button type="button" class="cert">CSWIP-3.1</button>
+        </div>
+      </div>
+
+      <label style="display:flex;gap:0.65rem;align-items:flex-start;padding:0.85rem;border:1px solid var(--line);border-radius:10px;cursor:pointer">
+        <input type="checkbox" style="margin-top:0.2rem" />
+        <span>
+          <strong style="color:var(--navy);font-size:0.9rem">Prefers QE-approved inspector</strong>
+          <span class="control-hint" style="display:block;margin:0.2rem 0 0">Non–QE can still be assigned with a warning override.</span>
+        </span>
+      </label>
+
+      <div class="summary" id="summary"></div>
+
+      <button type="submit" class="btn-primary">Create job</button>
+      <p class="callout">
+        Mock for <strong>CM-024</strong> (auto vs manual complete) and <strong>CM-025</strong> (single/team · day/hourly).
+        Confirm this control bar, then we implement in the app.
+      </p>
+    </form>
+  </div>
+
+  <script>
+    const INSPECTORS = [
+      { id: "1", name: "Aju Joseph (E4219)", rateDay: 275, rateHour: 45 },
+      { id: "2", name: "Lester Pais (E4494)", rateDay: 250, rateHour: 40 },
+      { id: "3", name: "Zerij Naranath (E4596)", rateDay: 275, rateHour: 45 },
+      { id: "4", name: "Sanal Ravi (E4603)", rateDay: 275, rateHour: 45 },
+    ];
+
+    const state = {
+      completion: "auto",
+      assignment: "single",
+      rate: "day",
+      when: "later",
+      pax: 1,
+    };
+
+    const hints = {
+      completion: {
+        auto: "Job closes automatically when the end date passes.",
+        manual: "Staff or inspector must mark complete (current behaviour).",
+      },
+      assignment: {
+        single: "One inspector for this job.",
+        team: "Multi-PAX team (2–4+). Set headcount and optional people below.",
+      },
+      rate: {
+        day: "Commercial rate charged per calendar day on site.",
+        hourly: "Commercial rate charged per hour worked.",
+      },
+      when: {
+        later: "Job opens as Proposed. Assign from the board when ready.",
+        now: "Pick people below (blanks OK). Any filled row makes the job Active.",
+      },
+    };
+
+    function $(id) { return document.getElementById(id); }
+
+    function inclusiveDays(a, b) {
+      if (!a || !b || b < a) return 0;
+      const d0 = new Date(a + "T00:00:00");
+      const d1 = new Date(b + "T00:00:00");
+      return Math.floor((d1 - d0) / 86400000) + 1;
+    }
+
+    function money(n) {
+      return "QAR " + (Number.isFinite(n) ? Math.round(n).toLocaleString() : "0");
+    }
+
+    function bindSegs() {
+      document.querySelectorAll(".seg").forEach((seg) => {
+        const group = seg.dataset.group;
+        seg.querySelectorAll("button").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            seg.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            state[group] = btn.dataset.value;
+            $("hint-" + group).textContent = hints[group][state[group]];
+            if (group === "assignment") {
+              if (state.assignment === "single") {
+                state.pax = 1;
+                $("paxCustom").value = "1";
+                document.querySelectorAll("[data-pax]").forEach((b) => {
+                  b.classList.toggle("on", b.dataset.pax === "1");
+                });
+              } else if (state.pax < 2) {
+                state.pax = 2;
+                $("paxCustom").value = "2";
+                document.querySelectorAll("[data-pax]").forEach((b) => {
+                  b.classList.toggle("on", b.dataset.pax === "2");
+                });
+              }
+            }
+            refresh();
+          });
+        });
+      });
+    }
+
+    function bindWhen() {
+      ["later", "now"].forEach((w) => {
+        $("when-" + w).addEventListener("click", () => {
+          state.when = w;
+          $("when-later").classList.toggle("on", w === "later");
+          $("when-now").classList.toggle("on", w === "now");
+          $("hint-when").textContent = hints.when[w];
+          refresh();
+        });
+      });
+    }
+
+    function bindPax() {
+      document.querySelectorAll("[data-pax]").forEach((b) => {
+        b.addEventListener("click", () => {
+          state.pax = Number(b.dataset.pax);
+          $("paxCustom").value = String(state.pax);
+          document.querySelectorAll("[data-pax]").forEach((x) => {
+            x.classList.toggle("on", x.dataset.pax === String(state.pax));
+          });
+          refresh();
+        });
+      });
+      $("paxCustom").addEventListener("change", () => {
+        state.pax = Math.min(20, Math.max(1, Number($("paxCustom").value) || 1));
+        $("paxCustom").value = String(state.pax);
+        document.querySelectorAll("[data-pax]").forEach((x) => {
+          x.classList.toggle("on", x.dataset.pax === String(state.pax));
+        });
+        refresh();
+      });
+    }
+
+    function bindCerts() {
+      $("certs").querySelectorAll(".cert").forEach((c) => {
+        c.addEventListener("click", () => c.classList.toggle("on"));
+      });
+    }
+
+    function rateLabel() {
+      return state.rate === "day" ? "Day rate (QAR)" : "Hourly rate (QAR)";
+    }
+
+    function defaultRate(ins) {
+      if (!ins) return "";
+      return state.rate === "day" ? String(ins.rateDay) : String(ins.rateHour);
+    }
+
+    function renderSlots() {
+      const show = state.when === "now";
+      $("block-slots").classList.toggle("hidden", !show);
+      $("block-pax").classList.toggle("hidden", state.assignment === "single");
+      $("slots-label").textContent =
+        state.assignment === "team" ? `Team slots (${state.pax})` : "Inspector";
+      $("est-label").textContent = state.rate === "hourly" ? "Est. hours" : "Est. hours (optional)";
+
+      if (!show) {
+        $("slots").innerHTML = "";
+        return;
+      }
+
+      const count = state.assignment === "single" ? 1 : state.pax;
+      const start = $("start").value;
+      const end = $("end").value;
+      const days = inclusiveDays(start, end);
+      let total = 0;
+
+      const rows = [];
+      for (let i = 0; i < count; i++) {
+        rows.push(`
+          <div class="team-row" data-row="${i}">
+            <div>
+              <label class="label">Inspector ${state.assignment === "team" ? i + 1 : ""}</label>
+              <select class="input slot-ins">
+                <option value="">— Leave blank —</option>
+                ${INSPECTORS.map((p) => `<option value="${p.id}">${p.name}</option>`).join("")}
+              </select>
+            </div>
+            <div>
+              <label class="label">Start</label>
+              <input class="input slot-start" type="date" value="${start}" />
+            </div>
+            <div>
+              <label class="label">End</label>
+              <input class="input slot-end" type="date" value="${end}" />
+            </div>
+            <div>
+              <label class="label">${rateLabel()}</label>
+              <input class="input slot-rate" type="number" min="0" value="" />
+            </div>
+            <div class="row-total">
+              <span class="slot-total">—</span>
+              <small class="slot-meta"></small>
+            </div>
+          </div>
+        `);
+      }
+      $("slots").innerHTML = rows.join("");
+
+      $("slots").querySelectorAll(".team-row").forEach((row) => {
+        const ins = row.querySelector(".slot-ins");
+        const rate = row.querySelector(".slot-rate");
+        const s = row.querySelector(".slot-start");
+        const e = row.querySelector(".slot-end");
+        const tot = row.querySelector(".slot-total");
+        const meta = row.querySelector(".slot-meta");
+
+        const recalc = () => {
+          const person = INSPECTORS.find((p) => p.id === ins.value);
+          if (person && rate.value === "") rate.value = defaultRate(person);
+          const r = Number(rate.value) || 0;
+          const d = inclusiveDays(s.value, e.value);
+          let amount = 0;
+          if (state.rate === "day") {
+            amount = r * d;
+            meta.textContent = d ? `${d} day${d === 1 ? "" : "s"}` : "";
+          } else {
+            const hrs = Number($("est").value) || 0;
+            const share = state.assignment === "team" ? hrs / Math.max(1, count) : hrs;
+            amount = r * share;
+            meta.textContent = share ? `~${share.toFixed(0)}h share` : "";
+          }
+          tot.textContent = amount ? money(amount) : "—";
+          updateTeamTotal();
+        };
+
+        ins.addEventListener("change", () => {
+          const person = INSPECTORS.find((p) => p.id === ins.value);
+          rate.value = person ? defaultRate(person) : "";
+          recalc();
+        });
+        [rate, s, e].forEach((el) => el.addEventListener("input", recalc));
+        recalc();
+      });
+
+      function updateTeamTotal() {
+        let sum = 0;
+        $("slots").querySelectorAll(".slot-total").forEach((el) => {
+          const n = Number(String(el.textContent).replace(/[^\d.]/g, ""));
+          if (Number.isFinite(n)) sum += n;
+        });
+        $("team-total").textContent = money(sum);
+        total = sum;
+      }
+      updateTeamTotal();
+    }
+
+    function refreshSummary() {
+      const parts = [
+        state.completion === "auto" ? "Auto-close on end date" : "Manual complete",
+        state.assignment === "team" ? `Team · ${state.pax} PAX` : "Single inspector",
+        state.rate === "day" ? "Day rate" : "Hourly rate",
+        state.when === "now" ? "Assign now" : "Assign later → Proposed",
+      ];
+      $("summary").textContent = "Will create: " + parts.join(" · ");
+    }
+
+    function refresh() {
+      renderSlots();
+      refreshSummary();
+    }
+
+    function onSubmit(e) {
+      e.preventDefault();
+      alert(
+        "Mock only — not saved.\n\n" +
+          $("summary").textContent +
+          "\nRef: " +
+          $("ref").value +
+          "\nTitle: " +
+          $("title").value
+      );
+      return false;
+    }
+
+    ["start", "end", "est"].forEach((id) => {
+      $(id).addEventListener("change", refresh);
+      $(id).addEventListener("input", refresh);
+    });
+
+    bindSegs();
+    bindWhen();
+    bindPax();
+    bindCerts();
+    refresh();
+  </script>
+</body>
+</html>

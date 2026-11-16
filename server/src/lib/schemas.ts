@@ -33,9 +33,50 @@ export const createJobSchema = z.object({
   jobTypeId: z.coerce.number().int().positive().optional().nullable(),
   certificationIds: z.array(z.coerce.number().int().positive()).optional(),
   requiresQeApproval: z.coerce.boolean().optional(),
+  /** CM-024: default true — auto-close when end date passes. */
+  autoCompleteOnEndDate: z.coerce.boolean().optional(),
+  /** CM-025: day | hourly */
+  rateBasis: z.enum(['day', 'hourly']).optional(),
   agreedPriceUsd: optionalUsd,
   /** Optional inspectors at create. Filled slots → Active; all blank → Proposed. */
   teamSlots: z.array(teamSlotSchema).max(20).optional(),
+});
+
+export const createUserSchema = z.object({
+  email: z.string().trim().email().max(320),
+  fullName: z.string().trim().min(1).max(120),
+  role: z.enum(['Admin', 'Manager', 'Coordinator', 'Inspector']),
+  password: z.string().min(8).max(200).optional(),
+  departmentIds: z.array(z.coerce.number().int().positive()).optional(),
+});
+
+export const updateUserSchema = z.object({
+  fullName: z.string().trim().min(1).max(120).optional(),
+  role: z.enum(['Admin', 'Manager', 'Coordinator', 'Inspector']).optional(),
+  password: z.string().min(8).max(200).optional(),
+  /** Empty array = all departments. Omit to leave unchanged. */
+  departmentIds: z.array(z.coerce.number().int().positive()).optional(),
+});
+
+export const bulkImportUsersSchema = z.object({
+  users: z
+    .array(
+      z.object({
+        email: z.string().trim().email().max(320),
+        fullName: z.string().trim().min(1).max(120),
+        role: z.enum(['Admin', 'Manager', 'Coordinator', 'Inspector']).default('Coordinator'),
+        /** Dept codes e.g. LIFT,RIGS — empty = all departments */
+        departmentCodes: z.array(z.string().trim().min(1).max(40)).optional(),
+      })
+    )
+    .min(1)
+    .max(200),
+  /** When true, regenerate password for existing emails (upsert). Default: skip existing. */
+  resetExistingPasswords: z.coerce.boolean().optional(),
+});
+
+export const resetPasswordsSchema = z.object({
+  userIds: z.array(z.coerce.number().int().positive()).min(1).max(200),
 });
 
 export const updateJobSchema = z.object({

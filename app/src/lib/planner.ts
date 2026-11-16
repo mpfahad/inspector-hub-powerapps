@@ -1,15 +1,22 @@
 import type { PlannerAllocation, PlannerConflict, UtilizationBand } from './api';
 
+/** Booked hours below this render as a half-height bar on the planner day cell. */
+export const HALF_DAY_HOURS = 6;
+
 export const BAND_STYLES: Record<
   UtilizationBand,
   { dot: string; cell: string; label: string }
 > = {
   available: { dot: 'bg-teal', cell: 'bg-teal/5', label: 'Available' },
-  partial: { dot: 'bg-amber-400', cell: 'bg-amber-50', label: 'Partially allocated' },
+  partial: { dot: 'bg-amber-400', cell: 'bg-amber-50', label: 'Half day (<6h)' },
   heavy: { dot: 'bg-orange-500', cell: 'bg-orange-50', label: 'Heavy utilization' },
   full: { dot: 'bg-red-500', cell: 'bg-red-50', label: 'Fully allocated' },
   off: { dot: 'bg-slate-400', cell: 'bg-slate-100', label: 'Leave / Training' },
 };
+
+export function isHalfDayBooked(hours: number) {
+  return hours > 0 && hours < HALF_DAY_HOURS;
+}
 
 export const KIND_STYLES: Record<PlannerAllocation['kind'], string> = {
   job: 'bg-gradient-to-r from-navy to-steel text-white border-navy/30',

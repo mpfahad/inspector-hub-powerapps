@@ -1,0 +1,10 @@
+node_modules
+dist
+prisma/prisma
+*.db
+*.db-journal
+.env
+.env.*
+scripts/**/*.csv
+**/*.log
+.git

@@ -8,8 +8,8 @@ const isDev = import.meta.env.DEV;
 export function LoginPage() {
   const { login, user, loading } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState(isDev ? 'coordinator@irppms.local' : '');
-  const [password, setPassword] = useState(isDev ? 'password123' : '');
+  const [email, setEmail] = useState(isDev ? 'fahad.mp@applus.com' : '');
+  const [password, setPassword] = useState(isDev ? 'ApplusHub2026!' : '');
   const [error, setError] = useState('');
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
 
@@ -42,8 +42,8 @@ export function LoginPage() {
     <div className="flex min-h-screen">
       <div className="hidden lg:flex flex-1 flex-col justify-between bg-navy text-white p-12">
         <div>
-          <div className="text-2xl font-bold">IRPPMS</div>
-          <div className="text-xs opacity-70 uppercase tracking-wider">Inspector Resource Planning & Productivity Management System</div>
+          <div className="text-2xl font-bold">Inspection Hub</div>
+          <div className="text-xs opacity-70 uppercase tracking-wider">Resource planning for inspection teams</div>
         </div>
         <p className="max-w-md text-lg opacity-90">Local deployment — your data stays on your infrastructure.</p>
         <div className="text-xs opacity-60">Docker · SQLite · No third-party services</div>

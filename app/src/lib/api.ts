@@ -212,6 +212,53 @@ export const api = {
     }
   ) => request<Client>(`/api/clients/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   departments: () => request<Department[]>('/api/departments'),
+  users: () => request<AppUserAccount[]>('/api/users'),
+  createUser: (data: {
+    email: string;
+    fullName: string;
+    role: string;
+    password?: string;
+    departmentIds?: number[];
+  }) => request<AppUserAccount>('/api/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (
+    id: number,
+    data: {
+      fullName?: string;
+      role?: string;
+      password?: string;
+      departmentIds?: number[];
+    }
+  ) => request<AppUserAccount>(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  bulkImportUsers: (data: {
+    users: {
+      email: string;
+      fullName: string;
+      role: string;
+      departmentCodes?: string[];
+    }[];
+    resetExistingPasswords?: boolean;
+  }) =>
+    request<{
+      items: {
+        id: number;
+        email: string;
+        fullName: string;
+        role: string;
+        temporaryPassword: string;
+        action: 'created' | 'password_reset' | 'skipped';
+      }[];
+      errors: { email: string; error: string }[];
+    }>('/api/users/bulk-import', { method: 'POST', body: JSON.stringify(data) }),
+  resetUserPasswords: (userIds: number[]) =>
+    request<{
+      items: {
+        id: number;
+        email: string;
+        fullName: string;
+        role: string;
+        temporaryPassword: string;
+      }[];
+    }>('/api/users/reset-passwords', { method: 'POST', body: JSON.stringify({ userIds }) }),
   certifications: () => request<Certification[]>('/api/certifications'),
   createCertification: (data: {
     code: string;
@@ -368,7 +415,27 @@ export const api = {
     request<PriceChartData>('/api/price-chart', { method: 'PUT', body: JSON.stringify(data) }),
 };
 
-export type User = { id: number; email: string; role: string; fullName: string; inspectorId?: number | null };
+export type User = {
+  id: number;
+  email: string;
+  role: string;
+  fullName: string;
+  inspectorId?: number | null;
+  /** Empty = all departments (CM-022). */
+  departmentIds?: number[];
+};
+
+export type AppUserAccount = {
+  id: number;
+  email: string;
+  fullName: string;
+  role: string;
+  identityProvider: string;
+  createdAt: string;
+  departments: Department[];
+  allDepartments: boolean;
+  temporaryPassword?: string;
+};
 export type Client = {
   id: number;
   name: string;
@@ -380,7 +447,7 @@ export type Client = {
   email?: string | null;
 };
 export type Department = { id: number; name: string; code: string };
-export type Certification = { id: number; code: string; name: string };
+export type Certification = { id: number; code: string; name: string; issuer?: string | null };
 export type InspectorCert = {
   id: number;
   status: string;
@@ -430,12 +497,15 @@ export type Job = {
   id: number; ref: string; title: string; status: string; priority: string;
   startDate: string; endDate: string;
   completedAt?: string;
+  estimatedHours?: number;
   client: Client; department: Department;
   jobType?: JobType;
   assignments?: Assignment[];
   proposals?: Proposal[];
   requiresQeApproval?: boolean;
   requiredInspectorCount?: number;
+  autoCompleteOnEndDate?: boolean;
+  rateBasis?: 'day' | 'hourly';
   agreedPriceUsd?: number | null;
   suggestedPriceUsd?: number | null;
   location?: string | null;
@@ -603,6 +673,8 @@ export type CreateJobPayload = {
   priority?: string; estimatedHours?: number; certificationIds?: number[];
   requiresQeApproval?: boolean;
   requiredInspectorCount?: number;
+  autoCompleteOnEndDate?: boolean;
+  rateBasis?: 'day' | 'hourly';
   teamSlots?: CreateJobTeamSlot[];
 };
 

@@ -1,6 +1,29 @@
+import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma.js';
 import { geocodeSampleLocation, qatarLocationForLegacy } from '../lib/geo.js';
 import { ensurePriceChartDefaults } from './pricing.js';
+
+/** Primary UAT admin — created if missing; password not overwritten on later startups. */
+export async function ensurePrimaryAdmin() {
+  const email = 'fahad.mp@applus.com';
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    if (existing.role !== 'Admin') {
+      await prisma.user.update({ where: { id: existing.id }, data: { role: 'Admin' } });
+    }
+    return;
+  }
+  const passwordHash = await bcrypt.hash('ApplusHub2026!', 10);
+  await prisma.user.create({
+    data: {
+      email,
+      fullName: 'Fahad',
+      role: 'Admin',
+      passwordHash,
+      identityProvider: 'local',
+    },
+  });
+}
 
 function migrateEntityToQatar(
   location: string | null | undefined,
@@ -67,6 +90,7 @@ export async function ensureInspectorCostHistoryBaseline() {
 }
 
 export async function applyProductDefaults() {
+  await ensurePrimaryAdmin();
   await ensureClientCoordinates();
   await ensureJobCoordinates();
   await ensurePriceChartDefaults();

@@ -26,9 +26,13 @@ export function inclusiveDays(start: string, end: string): number {
   return Math.floor((b.getTime() - a.getTime()) / 86_400_000) + 1;
 }
 
-export function slotRowTotal(slot: TeamSlot): number {
+export function slotRowTotal(slot: TeamSlot, rateBasis: 'day' | 'hourly' = 'day', estHours = 0): number {
   const rate = Number(slot.dayRate);
   if (!Number.isFinite(rate) || rate < 0) return 0;
+  if (rateBasis === 'hourly') {
+    const hours = Number.isFinite(estHours) && estHours > 0 ? estHours : 0;
+    return hours * rate;
+  }
   return inclusiveDays(slot.startDate, slot.endDate) * rate;
 }
 
@@ -55,22 +59,32 @@ type Props = {
   inspectors: TeamSlotInspectorOption[];
   onChange: (slots: TeamSlot[]) => void;
   disabled?: boolean;
+  rateBasis?: 'day' | 'hourly';
+  /** Used for hourly row totals (job estimated hours / team size when known). */
+  hoursPerSlot?: number;
 };
 
-export function TeamSlotsEditor({ slots, inspectors, onChange, disabled }: Props) {
+export function TeamSlotsEditor({
+  slots,
+  inspectors,
+  onChange,
+  disabled,
+  rateBasis = 'day',
+  hoursPerSlot = 0,
+}: Props) {
   const update = (key: string, patch: Partial<TeamSlot>) => {
     onChange(slots.map((s) => (s.key === key ? { ...s, ...patch } : s)));
   };
 
   const usedIds = new Set(slots.map((s) => s.inspectorId).filter(Boolean));
 
-  const teamTotal = slots.reduce((sum, s) => sum + slotRowTotal(s), 0);
+  const teamTotal = slots.reduce((sum, s) => sum + slotRowTotal(s, rateBasis, hoursPerSlot), 0);
 
   return (
     <div className="space-y-3">
       {slots.map((slot, index) => {
         const days = inclusiveDays(slot.startDate, slot.endDate);
-        const total = slotRowTotal(slot);
+        const total = slotRowTotal(slot, rateBasis, hoursPerSlot);
         return (
           <div
             key={slot.key}
@@ -127,7 +141,9 @@ export function TeamSlotsEditor({ slots, inspectors, onChange, disabled }: Props
               />
             </div>
             <div>
-              <label className="text-xs text-slate-500">Day rate (QAR)</label>
+              <label className="text-xs text-slate-500">
+                {rateBasis === 'hourly' ? 'Hourly rate (QAR)' : 'Day rate (QAR)'}
+              </label>
               <input
                 type="number"
                 min="0"
@@ -141,10 +157,22 @@ export function TeamSlotsEditor({ slots, inspectors, onChange, disabled }: Props
             <div className="text-sm pb-2">
               <div className="text-xs text-slate-500">Row total</div>
               <div className="font-medium text-navy tabular-nums">
-                {days > 0 && slot.dayRate !== '' ? formatMoney(total) : '—'}
+                {slot.dayRate !== '' && (rateBasis === 'hourly' ? hoursPerSlot > 0 : days > 0)
+                  ? formatMoney(total)
+                  : '—'}
               </div>
-              {days > 0 && (
-                <div className="text-[11px] text-slate-400">{days} day{days === 1 ? '' : 's'}</div>
+              {rateBasis === 'hourly' ? (
+                hoursPerSlot > 0 && (
+                  <div className="text-[11px] text-slate-400">
+                    ~{hoursPerSlot}h × rate
+                  </div>
+                )
+              ) : (
+                days > 0 && (
+                  <div className="text-[11px] text-slate-400">
+                    {days} day{days === 1 ? '' : 's'}
+                  </div>
+                )
               )}
             </div>
           </div>

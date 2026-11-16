@@ -25,6 +25,7 @@ import {
   departmentsRouter,
   certificationsRouter,
 } from './routes/reference.js';
+import usersRouter from './routes/users.js';
 import { promoteAssignedJobsToActive } from './services/jobWorkflow.js';
 import { applyProductDefaults } from './services/seedDefaults.js';
 
@@ -70,6 +71,7 @@ app.use('/api/price-chart', priceChartRouter);
 app.use('/api/clients', clientsRouter);
 app.use('/api/inspectors', inspectorsRouter);
 app.use('/api/certifications', certificationsRouter);
+app.use('/api/users', usersRouter);
 
 app.listen(PORT, () => {
   console.log(`IRPPMS API listening on http://localhost:${PORT}`);

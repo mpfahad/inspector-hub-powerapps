@@ -4,7 +4,7 @@ import { api, type Client, type Department, type Inspector, type InspectorCert, 
 import { formatMoney } from '../lib/money';
 import { useAuth } from '../context/AuthContext';
 import { useOptionalDepartment } from '../context/DepartmentContext';
-import { currentAssignment } from '../lib/jobs';
+import { openAssignments } from '../lib/jobs';
 
 function certBadgeClass(status: string) {
   if (status === 'Valid') return 'bg-teal/10 text-teal';
@@ -92,8 +92,7 @@ export function InspectorsPage() {
     load();
     api.departments().then(setDepartments).catch(() => setDepartments([]));
     api.jobsBoard().then((board) => {
-      const jobs = [...board.columns.new, ...board.columns.active, ...board.columns.completed];
-      setLoanJobs(jobs);
+      setLoanJobs(board.all?.length ? board.all : [...board.columns.new, ...board.columns.active]);
     }).catch(() => setLoanJobs([]));
   }, []);
 
@@ -134,17 +133,45 @@ export function InspectorsPage() {
     });
   }, [items, deptFilter, statusFilter, qeFilter, search]);
 
+  /** Open (in-progress) jobs per inspector — for list column + loan markers. */
+  const activeJobsByInspector = useMemo(() => {
+    const map = new Map<number, { id: number; ref: string; title: string; status: string; deptCode: string }[]>();
+    const live = loanJobs.filter((j) =>
+      ['Active', 'PendingAcceptance', 'Proposed'].includes(j.status)
+    );
+    for (const job of live) {
+      for (const a of openAssignments(job)) {
+        const list = map.get(a.inspector.id) ?? [];
+        if (!list.some((x) => x.id === job.id)) {
+          list.push({
+            id: job.id,
+            ref: job.ref,
+            title: job.title,
+            status: job.status,
+            deptCode: job.department.code,
+          });
+        }
+        map.set(a.inspector.id, list);
+      }
+    }
+    return map;
+  }, [loanJobs]);
+
   /** Home-dept inspectors who are assigned to a job in another department. */
   const loanedOut = useMemo(() => {
     const map = new Map<number, { jobRef: string; jobDept: string }>();
     for (const job of loanJobs) {
-      const a = currentAssignment(job);
-      if (!a) continue;
-      if (a.inspector.department?.id === job.department.id) continue;
-      if (deptFilter && a.inspector.department?.name !== deptFilter && a.inspector.department?.code !== deptFilter) {
-        continue;
+      for (const a of openAssignments(job)) {
+        if (a.inspector.department?.id === job.department.id) continue;
+        if (
+          deptFilter &&
+          a.inspector.department?.name !== deptFilter &&
+          a.inspector.department?.code !== deptFilter
+        ) {
+          continue;
+        }
+        map.set(a.inspector.id, { jobRef: job.ref, jobDept: job.department.name });
       }
-      map.set(a.inspector.id, { jobRef: job.ref, jobDept: job.department.name });
     }
     return map;
   }, [loanJobs, deptFilter]);
@@ -153,13 +180,20 @@ export function InspectorsPage() {
   const borrowedIn = useMemo(() => {
     if (!deptFilter) return [] as { inspector: Inspector; jobRef: string }[];
     const out: { inspector: Inspector; jobRef: string }[] = [];
+    const seen = new Set<string>();
     for (const job of loanJobs) {
       if (job.department.name !== deptFilter && job.department.code !== deptFilter) continue;
-      const a = currentAssignment(job);
-      if (!a?.inspector?.department) continue;
-      if (a.inspector.department.name === deptFilter || a.inspector.department.code === deptFilter) continue;
-      const full = items.find((i) => i.id === a.inspector.id);
-      if (full) out.push({ inspector: full, jobRef: job.ref });
+      for (const a of openAssignments(job)) {
+        if (!a?.inspector?.department) continue;
+        if (a.inspector.department.name === deptFilter || a.inspector.department.code === deptFilter) {
+          continue;
+        }
+        const key = `${a.inspector.id}-${job.ref}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const full = items.find((i) => i.id === a.inspector.id);
+        if (full) out.push({ inspector: full, jobRef: job.ref });
+      }
     }
     return out;
   }, [loanJobs, deptFilter, items]);
@@ -522,12 +556,14 @@ export function InspectorsPage() {
                     <th className="p-3">QE approved</th>
                     <th className="p-3">Qualifications</th>
                     <th className="p-3">Status</th>
+                    <th className="p-3 min-w-[10rem]">Active jobs</th>
                   </tr>
                 </thead>
                 <tbody>
                   {group.rows.map((i) => {
                     const loan = loanedOut.get(i.id);
                     const href = deptCtx?.deptPath(`inspectors/${i.id}`) ?? `/inspectors/${i.id}`;
+                    const jobs = activeJobsByInspector.get(i.id) ?? [];
                     return (
                       <tr
                         key={i.id}
@@ -566,6 +602,32 @@ export function InspectorsPage() {
                             <span className="badge bg-amber-100 text-amber-900">On loan</span>
                           ) : (
                             <span className="badge bg-slate-100">{i.status}</span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          {jobs.length === 0 ? (
+                            <span className="text-xs text-slate-400">—</span>
+                          ) : (
+                            <ul className="space-y-1">
+                              {jobs.map((j) => {
+                                const jobHref =
+                                  deptCtx?.deptPath(`jobs/${j.id}`) ?? `/jobs/${j.id}`;
+                                return (
+                                  <li key={j.id}>
+                                    <Link
+                                      to={jobHref}
+                                      className="text-teal hover:underline font-mono text-xs font-semibold"
+                                      title={j.title}
+                                    >
+                                      {j.ref}
+                                    </Link>
+                                    <span className="text-[10px] text-slate-400 ml-1">
+                                      {j.deptCode}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
                           )}
                         </td>
                       </tr>

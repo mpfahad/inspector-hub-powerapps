@@ -255,6 +255,9 @@ router.post('/', requireRole(...STAFF_ROLES), validateBody(createJobSchema), asy
       requiredInspectorCount: body.requiredInspectorCount ? Number(body.requiredInspectorCount) : 1,
       jobTypeId,
       requiresQeApproval: Boolean(body.requiresQeApproval),
+      autoCompleteOnEndDate:
+        body.autoCompleteOnEndDate === undefined ? true : Boolean(body.autoCompleteOnEndDate),
+      rateBasis: body.rateBasis === 'hourly' ? 'hourly' : 'day',
       agreedPriceUsd: body.agreedPriceUsd != null ? Number(body.agreedPriceUsd) : null,
       createdByEmail: req.user?.email,
       status: 'Draft',

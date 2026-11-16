@@ -42,6 +42,19 @@ Do **not** run `git reset --hard` on a shared branch unless you explicitly want 
 - Import NDT / Rope Access roster + job types from filled templates
 - Further product increments as logged in CHANGE-MANAGER
 
+### Post-`v0.10.0-uat` (unreleased on this branch)
+
+- **CM-022** — Inspection Hub branding; dept cards on home; sidebar focuses on selected dept only; Settings bottom-left
+- **CM-023** — Planner booked hours on cells/rows
+- **CM-024** — Auto-complete on end date (toggle + startup sweep)
+- **CM-025** — New job control bar (single/team · day/hourly)
+- **CM-026** — Inspector detail: active/history up; leave + expandable certs down
+- **CM-027** — Admin `fahad.mp@applus.com`; Settings create/edit/bulk import/reset + export temp passwords; demo staff removed
+- **CM-028** — Browser title **Inspection Hub**
+- **CM-029** — Live Docker pack (`docker-compose.yml` + prod Dockerfiles + `docs/DOCKER-LIVE.md`); no seed-on-start
+- Planner: &lt;6h booked → half-height day bar (CM-023 refinement)
+- Readiness audit notes: `docs/APP-READINESS-AUDIT.md` (dev compose still wipe-seeds; use live compose for other PC)
+
 ---
 
 *Last updated: 2026-11-15*

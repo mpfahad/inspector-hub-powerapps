@@ -10,3 +10,4 @@ server/prisma/*.db-journal
 *.local
 .env
 .env.*
+!.env.example

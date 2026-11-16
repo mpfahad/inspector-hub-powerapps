@@ -1,0 +1,66 @@
+# Inspection Hub — live / UAT Docker (alongside Training Manager & Contract App)
+# Ports: web 5180, API 4100 (Contract uses 5173/4000)
+# Start:  docker compose up -d --build
+# Seed once (empty DB only): docker compose --profile seed run --rm seed
+name: inspection-hub
+
+services:
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: inspection-hub-api
+    ports:
+      - "${IRPPMS_API_PORT:-4100}:4100"
+    volumes:
+      - inspection-hub-data:/data
+    environment:
+      NODE_ENV: production
+      PORT: "4100"
+      DATABASE_URL: file:/data/irppms.db
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (32+ characters)}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5180}
+      # LAN HTTP without TLS — cookies must not require Secure
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4100/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  web:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: inspection-hub-web
+    ports:
+      - "${IRPPMS_WEB_PORT:-5180}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # One-shot destructive seed — NEVER use against UAT data you care about
+  seed:
+    profiles: ["seed"]
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    volumes:
+      - inspection-hub-data:/data
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: file:/data/irppms.db
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (32+ characters)}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        npx prisma db push --skip-generate
+        echo "WARNING: running full wipe seed…"
+        npx tsx prisma/seed.ts
+
+volumes:
+  inspection-hub-data:
+    name: inspection-hub-data

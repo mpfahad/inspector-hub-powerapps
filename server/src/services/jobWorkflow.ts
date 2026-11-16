@@ -45,6 +45,43 @@ export async function promoteAssignedJobsToActive() {
       });
     }
   }
+
+  await autoCloseJobsPastEndDate();
+}
+
+/**
+ * CM-024: assigned jobs with autoCompleteOnEndDate close when calendar end date has passed.
+ * Manual-complete jobs are left open (may show overdue) until staff/inspector marks complete.
+ */
+export async function autoCloseJobsPastEndDate() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const due = await prisma.job.findMany({
+    where: {
+      autoCompleteOnEndDate: true,
+      status: { in: ['Active', 'PendingAcceptance'] },
+      endDate: { lt: today },
+      assignments: { some: { status: { in: ['Accepted', 'Active', 'PendingAcceptance'] } } },
+    },
+    select: { id: true, ref: true },
+  });
+
+  for (const job of due) {
+    await prisma.job.update({
+      where: { id: job.id },
+      data: {
+        completedAt: new Date(),
+        completedByEmail: 'system:auto-complete',
+        closingComments: 'Auto-completed on end date (CM-024)',
+      },
+    });
+    await prisma.assignment.updateMany({
+      where: { jobId: job.id, status: { in: ['Accepted', 'Active', 'PendingAcceptance'] } },
+      data: { status: 'Complete' },
+    });
+    await recordJobStatus(job.id, 'Closed', 'system:auto-complete', 'Auto-completed on end date');
+  }
 }
 
 export async function recordJobStatus(jobId: number, toStatus: JobStatus, userEmail?: string, note?: string) {

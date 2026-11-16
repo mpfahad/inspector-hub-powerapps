@@ -12,8 +12,12 @@ function workloadPct(allocatedHours: number, inspectorCount: number) {
   return Math.min(100, Math.round((allocatedHours / weeklyCapacity) * 100));
 }
 
-router.get('/overview', requireRole(...STAFF_ROLES), async (_req, res) => {
-  const departments = await prisma.department.findMany({ orderBy: { name: 'asc' } });
+router.get('/overview', requireRole(...STAFF_ROLES), async (req, res) => {
+  const allowed = req.user?.departmentIds ?? [];
+  const departments = await prisma.department.findMany({
+    where: allowed.length > 0 ? { id: { in: allowed } } : undefined,
+    orderBy: { name: 'asc' },
+  });
 
   const rows = await Promise.all(
     departments.map(async (dept) => {

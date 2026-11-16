@@ -182,13 +182,26 @@ export function JobDetailPage() {
             <h1 className="text-2xl font-bold text-navy">{job.ref}</h1>
             <p className="text-slate-600 mt-1">{job.title}</p>
           </div>
-          <span
-            className={`badge ${
-              job.status === 'Cancelled' ? 'bg-slate-200 text-slate-700' : 'bg-teal/10 text-teal'
-            }`}
-          >
-            {statusLabel(job.status)}
-          </span>
+          <div className="flex flex-wrap gap-2 justify-end">
+            <span
+              className={`badge ${
+                job.status === 'Cancelled' ? 'bg-slate-200 text-slate-700' : 'bg-teal/10 text-teal'
+              }`}
+            >
+              {statusLabel(job.status)}
+            </span>
+            {job.autoCompleteOnEndDate !== false && (
+              <span className="badge bg-slate-100 text-slate-600" title="Closes when end date passes">
+                Auto-complete
+              </span>
+            )}
+            {job.autoCompleteOnEndDate === false && (
+              <span className="badge bg-amber-100 text-amber-800">Manual complete</span>
+            )}
+            <span className="badge bg-slate-100 text-slate-600">
+              {job.rateBasis === 'hourly' ? 'Hourly rate' : 'Day rate'}
+            </span>
+          </div>
         </div>
         {job.status === 'Cancelled' && (
           <p className="mt-4 text-sm text-slate-700 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">

@@ -431,7 +431,7 @@ async function main() {
         requiredInspectorCount: 1,
         requiresQeApproval: !!spec.requiresQe,
         agreedPriceUsd: spec.agreedPriceUsd,
-        createdByEmail: 'coordinator@irppms.local',
+        createdByEmail: 'fahad.mp@applus.com',
         completedAt,
         completedByEmail: completedAt ? inspector.email : null,
         closingComments: completedAt
@@ -448,7 +448,7 @@ async function main() {
         jobId: job.id,
         fromStatus: 'Draft',
         toStatus: 'Proposed',
-        userEmail: 'coordinator@irppms.local',
+        userEmail: 'fahad.mp@applus.com',
         note: 'Sample submit',
       });
     }
@@ -457,7 +457,7 @@ async function main() {
         jobId: job.id,
         fromStatus: 'Proposed',
         toStatus: 'Active',
-        userEmail: 'coordinator@irppms.local',
+        userEmail: 'fahad.mp@applus.com',
         note: 'Sample assign',
       });
     }
@@ -466,7 +466,7 @@ async function main() {
         jobId: job.id,
         fromStatus: 'Active',
         toStatus: 'Closed',
-        userEmail: inspector.email ?? 'coordinator@irppms.local',
+        userEmail: inspector.email ?? 'fahad.mp@applus.com',
         note: 'Sample complete',
       });
     }
@@ -482,7 +482,7 @@ async function main() {
           role: 'Lead',
           allocatedHours: job.estimatedHours,
           status: 'Active',
-          createdByEmail: 'coordinator@irppms.local',
+          createdByEmail: 'fahad.mp@applus.com',
           decidedAt: startDate,
           dailyCostUsd: inspector.dailyCostUsd,
           dailyBillableUsd: inspector.dailyBillableUsd,

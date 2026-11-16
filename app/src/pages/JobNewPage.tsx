@@ -18,6 +18,37 @@ import {
 } from '../components/jobs/TeamSlotsEditor';
 
 type AssignMode = 'later' | 'now';
+type AssignmentShape = 'single' | 'team';
+type RateBasis = 'day' | 'hourly';
+type CompletionMode = 'auto' | 'manual';
+
+function SegToggle<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string }[];
+}) {
+  const set = (v: string) => onChange(v as T);
+  return (
+    <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 gap-0.5">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          className={`flex-1 px-2.5 py-1.5 text-xs rounded-md transition-colors ${
+            value === o.value ? 'bg-white text-navy font-medium shadow-sm' : 'text-slate-600 hover:text-navy'
+          }`}
+          onClick={() => set(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function JobNewPage() {
   const navigate = useNavigate();
@@ -29,6 +60,9 @@ export function JobNewPage() {
   const [duplicates, setDuplicates] = useState<DuplicateJobHit[]>([]);
   const [dupAck, setDupAck] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [completionMode, setCompletionMode] = useState<CompletionMode>('auto');
+  const [assignmentShape, setAssignmentShape] = useState<AssignmentShape>('single');
+  const [rateBasis, setRateBasis] = useState<RateBasis>('day');
   const [assignMode, setAssignMode] = useState<AssignMode>('later');
   const [teamSlots, setTeamSlots] = useState<TeamSlot[]>([]);
   const [form, setForm] = useState({
@@ -47,7 +81,22 @@ export function JobNewPage() {
     requiresQeApproval: false,
   });
 
-  const teamSize = Math.min(20, Math.max(1, Number(form.requiredInspectorCount) || 1));
+  const teamSize =
+    assignmentShape === 'single'
+      ? 1
+      : Math.min(20, Math.max(2, Number(form.requiredInspectorCount) || 2));
+
+  useEffect(() => {
+    if (assignmentShape === 'single') {
+      setForm((f) => (f.requiredInspectorCount === '1' ? f : { ...f, requiredInspectorCount: '1' }));
+    } else {
+      setForm((f) => {
+        const n = Number(f.requiredInspectorCount);
+        if (n >= 2) return f;
+        return { ...f, requiredInspectorCount: '2' };
+      });
+    }
+  }, [assignmentShape]);
 
   useEffect(() => {
     if (!department) return;
@@ -214,6 +263,8 @@ export function JobNewPage() {
         requiredInspectorCount: teamSize,
         certificationIds: form.certificationIds,
         requiresQeApproval: form.requiresQeApproval,
+        autoCompleteOnEndDate: completionMode === 'auto',
+        rateBasis,
         teamSlots: slotsPayload,
       });
       navigate(deptPath(`jobs/${job.id}`));
@@ -224,6 +275,10 @@ export function JobNewPage() {
 
   const selectedType = jobTypes.find((t) => String(t.id) === form.jobTypeId);
   const filledCount = filledTeamSlots(teamSlots).length;
+  const hoursPerSlot = Math.max(
+    0,
+    Math.round((Number(form.estimatedHours) || 0) / Math.max(1, teamSize))
+  );
 
   if (deptLoading || !department) {
     return <p className="text-sm text-slate-500">Loading department…</p>;
@@ -231,11 +286,76 @@ export function JobNewPage() {
 
   return (
     <div className="max-w-4xl">
-      <form onSubmit={submit} className="card p-6 space-y-4">
-        <p className="text-sm text-slate-500">
-          Creating in <span className="font-medium text-navy">{department.name}</span>. Job types listed are for this
-          department only.
-        </p>
+      <form onSubmit={submit} className="card p-6 space-y-5">
+        <div>
+          <h1 className="text-xl font-bold text-navy">New job</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Creating in <span className="font-medium text-navy">{department.name}</span>. Set completion,
+            team shape, and rate basis before the rest of the form.
+          </p>
+        </div>
+
+        {/* CM-024 / CM-025 control bar */}
+        <div
+          className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3"
+          aria-label="Job mode"
+        >
+          <div className="space-y-1.5">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              Completion
+            </div>
+            <SegToggle<CompletionMode>
+              value={completionMode}
+              onChange={(v) => setCompletionMode(v)}
+              options={[
+                { value: 'auto', label: 'Auto on end date' },
+                { value: 'manual', label: 'Manual complete' },
+              ]}
+            />
+            <p className="text-[11px] text-slate-500">
+              {completionMode === 'auto'
+                ? 'Job closes automatically when the end date passes.'
+                : 'Staff or inspector must mark complete.'}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              Assignment
+            </div>
+            <SegToggle<AssignmentShape>
+              value={assignmentShape}
+              onChange={(v) => setAssignmentShape(v)}
+              options={[
+                { value: 'single', label: 'Single' },
+                { value: 'team', label: 'Team' },
+              ]}
+            />
+            <p className="text-[11px] text-slate-500">
+              {assignmentShape === 'single'
+                ? 'One inspector for this job.'
+                : 'Multi-PAX team (2–4+). Set headcount below.'}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              Rate basis
+            </div>
+            <SegToggle<RateBasis>
+              value={rateBasis}
+              onChange={(v) => setRateBasis(v)}
+              options={[
+                { value: 'day', label: 'Day rate' },
+                { value: 'hourly', label: 'Hourly' },
+              ]}
+            />
+            <p className="text-[11px] text-slate-500">
+              {rateBasis === 'day'
+                ? 'Commercial rate charged per calendar day on site.'
+                : 'Commercial rate charged per hour worked.'}
+            </p>
+          </div>
+        </div>
+
         <div>
           <label className="text-xs font-medium">Job type</label>
           <select
@@ -346,7 +466,9 @@ export function JobNewPage() {
             />
           </div>
           <div>
-            <label className="text-xs font-medium">Est. hours</label>
+            <label className="text-xs font-medium">
+              {rateBasis === 'hourly' ? 'Est. hours' : 'Est. hours'}
+            </label>
             <input
               type="number"
               className="input mt-1"
@@ -356,37 +478,39 @@ export function JobNewPage() {
           </div>
         </div>
 
-        <div>
-          <label className="text-xs font-medium">Inspectors needed</label>
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            {[1, 2, 3, 4].map((n) => (
-              <button
-                key={n}
-                type="button"
-                className={`badge px-3 py-1.5 ${
-                  form.requiredInspectorCount === String(n)
-                    ? 'bg-teal/20 text-teal'
-                    : 'bg-slate-100 text-slate-600'
-                }`}
-                onClick={() => setForm({ ...form, requiredInspectorCount: String(n) })}
-              >
-                {n} PAX
-              </button>
-            ))}
-            <input
-              type="number"
-              min={1}
-              max={20}
-              className="input w-24"
-              value={form.requiredInspectorCount}
-              onChange={(e) => setForm({ ...form, requiredInspectorCount: e.target.value })}
-              aria-label="Custom inspector count"
-            />
+        {assignmentShape === 'team' && (
+          <div>
+            <label className="text-xs font-medium">Inspectors needed</label>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {[2, 3, 4].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`badge px-3 py-1.5 ${
+                    form.requiredInspectorCount === String(n)
+                      ? 'bg-teal/20 text-teal'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                  onClick={() => setForm({ ...form, requiredInspectorCount: String(n) })}
+                >
+                  {n} PAX
+                </button>
+              ))}
+              <input
+                type="number"
+                min={2}
+                max={20}
+                className="input w-24"
+                value={form.requiredInspectorCount}
+                onChange={(e) => setForm({ ...form, requiredInspectorCount: e.target.value })}
+                aria-label="Custom inspector count"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="rounded-lg border border-slate-200 p-4 space-y-3">
-          <p className="text-xs font-medium text-slate-500">Team assignment</p>
+          <p className="text-xs font-medium text-slate-500">When to assign</p>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -409,14 +533,18 @@ export function JobNewPage() {
           </div>
           <p className="text-xs text-slate-500">
             {assignMode === 'later'
-              ? 'Job opens in New (Proposed). Assign from the board when ready — default for most teams.'
-              : 'Fill any of the rows below (blanks OK). If at least one inspector is set, the job becomes Active.'}
+              ? 'Job opens as Proposed. Assign from the board when ready.'
+              : assignmentShape === 'single'
+                ? 'Pick one inspector below (blank OK). A filled row makes the job Active.'
+                : 'Fill any of the rows below (blanks OK). If at least one inspector is set, the job becomes Active.'}
           </p>
           {assignMode === 'now' && (
             <TeamSlotsEditor
               slots={teamSlots}
               inspectors={inspectors}
               onChange={setTeamSlots}
+              rateBasis={rateBasis}
+              hoursPerSlot={hoursPerSlot}
             />
           )}
         </div>

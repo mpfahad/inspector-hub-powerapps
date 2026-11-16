@@ -18,6 +18,7 @@ import { CompetencyPage } from './pages/CompetencyPage';
 import { PlannerPage } from './pages/PlannerPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { MapPopoutPage } from './pages/MapPopoutPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -71,6 +72,7 @@ export default function App() {
             }
           >
             <Route index element={<DashboardPage />} />
+            <Route path="settings" element={<StaffOnly><SettingsPage /></StaffOnly>} />
             <Route path="clients" element={<StaffOnly><ClientsPage /></StaffOnly>} />
 
             {/* Legacy redirects → department-scoped */}

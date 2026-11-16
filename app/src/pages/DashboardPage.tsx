@@ -1,8 +1,86 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, type OperationsDashboardData } from '../lib/api';
+import { api, type DepartmentOverview, type OperationsDashboardData } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { ActiveAssignmentCard, CompletedAssignmentCard } from '../components/assignments/AssignmentActionCard';
+import { rememberDeptCode } from '../context/DepartmentContext';
+
+function ProgressBarDept({ value, className = 'bg-teal' }: { value: number; className?: string }) {
+  return (
+    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+      <div className={`h-full rounded-full transition-all ${className}`} style={{ width: `${Math.min(100, value)}%` }} />
+    </div>
+  );
+}
+
+function DepartmentHomeCards() {
+  const [items, setItems] = useState<DepartmentOverview[]>([]);
+
+  useEffect(() => {
+    api.departmentsOverview().then(setItems).catch(() => setItems([]));
+  }, []);
+
+  const visible = items.filter((d) => d.code.toUpperCase() !== 'HOLD');
+
+  if (visible.length === 0) return null;
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-teal mb-1">Workspace</p>
+        <h2 className="text-xl font-bold text-navy">Departments</h2>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {visible.map((d) => (
+          <Link
+            key={d.id}
+            to={`/d/${d.code}/jobs`}
+            onClick={() => rememberDeptCode(d.code)}
+            className="card p-5 hover:shadow-md hover:border-teal/40 transition-all block"
+          >
+            <div className="flex items-start gap-3 mb-4">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-navy to-steel flex items-center justify-center text-white font-bold text-sm">
+                {d.code.slice(0, 2)}
+              </div>
+              <div className="min-w-0">
+                <div className="font-semibold text-navy">{d.name}</div>
+                <div className="text-xs text-slate-500">{d.code}</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <div className="rounded-lg bg-slate-50 p-2">
+                <div className="text-[10px] uppercase text-slate-500">Inspectors</div>
+                <div className="text-base font-bold text-navy">{d.inspectorCount}</div>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-2">
+                <div className="text-[10px] uppercase text-slate-500">Active</div>
+                <div className="text-base font-bold text-navy">{d.activeJobs}</div>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-2">
+                <div className="text-[10px] uppercase text-slate-500">Open</div>
+                <div className="text-base font-bold text-navy">{d.openJobs}</div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-slate-500">Workload</span>
+              <span
+                className={`text-xs font-semibold ${
+                  d.workloadPct > 85 ? 'text-red-600' : d.workloadPct > 70 ? 'text-amber-700' : 'text-teal'
+                }`}
+              >
+                {d.workloadPct}%
+              </span>
+            </div>
+            <ProgressBarDept
+              value={d.workloadPct}
+              className={d.workloadPct > 85 ? 'bg-red-500' : d.workloadPct > 70 ? 'bg-amber-500' : 'bg-teal'}
+            />
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 function StatCard({
   label,
@@ -58,13 +136,20 @@ function OperationsDashboard() {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-teal mb-1">
+          {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+        </p>
+        <h1 className="text-2xl font-bold text-navy">Inspection Hub</h1>
+        <p className="text-sm text-slate-500 mt-1">Choose a department card to open its workspace.</p>
+      </div>
+
+      <DepartmentHomeCards />
+
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 pt-2 border-t border-slate-100">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-teal mb-1">
-            {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-          </p>
-          <h1 className="text-2xl font-bold text-navy">Operations Dashboard</h1>
-          <p className="text-sm text-slate-500 mt-1">Inspector capacity, job pipeline, and field activity</p>
+          <h2 className="text-lg font-bold text-navy">Overall dashboard</h2>
+          <p className="text-sm text-slate-500 mt-0.5">Cross-department capacity and pipeline (after you pick a dept, use its own reports too)</p>
         </div>
         <div className="flex gap-2">
           <Link to="/planner" className="btn-secondary text-sm">Planner</Link>
@@ -119,7 +204,6 @@ function OperationsDashboard() {
               </div>
             ))}
           </div>
-          <Link to="/departments" className="text-sm text-teal hover:underline mt-4 inline-block">All departments →</Link>
         </div>
 
         <div className="card p-6 xl:col-span-2">

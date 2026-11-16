@@ -36,7 +36,7 @@ async function ensureLiftingDept() {
       data: {
         name: 'Lifting',
         code: 'LIFT',
-        managerEmail: 'manager@irppms.local',
+        managerEmail: 'fahad.mp@applus.com',
       },
     });
   }
@@ -248,43 +248,31 @@ async function upsertClients() {
   return upserted;
 }
 
-/** Ensure staff UAT accounts exist (especially Admin) after roster-only imports. */
-async function ensureStaffUsers(passwordHash: string) {
-  const staff = [
-    { email: 'coordinator@irppms.local', fullName: 'Alex Coordinator', role: UserRole.Coordinator },
-    { email: 'manager@irppms.local', fullName: 'Sarah Hollis', role: UserRole.Manager },
-    { email: 'admin@irppms.local', fullName: 'System Admin', role: UserRole.Admin },
-  ] as const;
-
-  for (const u of staff) {
-    const existing = await prisma.user.findUnique({ where: { email: u.email } });
-    if (!existing) {
-      await prisma.user.create({
-        data: {
-          email: u.email,
-          passwordHash,
-          fullName: u.fullName,
-          role: u.role,
-          identityProvider: IdentityProvider.local,
-        },
-      });
-      continue;
+/** Ensure primary Admin exists after roster-only imports (password not overwritten if present). */
+async function ensurePrimaryAdmin() {
+  const email = 'fahad.mp@applus.com';
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    if (existing.role !== UserRole.Admin) {
+      await prisma.user.update({ where: { id: existing.id }, data: { role: UserRole.Admin } });
     }
-    await prisma.user.update({
-      where: { id: existing.id },
-      data: {
-        role: u.role,
-        fullName: u.fullName,
-        identityProvider: IdentityProvider.local,
-        ...(existing.passwordHash ? {} : { passwordHash }),
-      },
-    });
+    return;
   }
+  const passwordHash = await bcrypt.hash('ApplusHub2026!', 10);
+  await prisma.user.create({
+    data: {
+      email,
+      passwordHash,
+      fullName: 'Fahad',
+      role: UserRole.Admin,
+      identityProvider: IdentityProvider.local,
+    },
+  });
 }
 
 async function main() {
   const passwordHash = await bcrypt.hash('password123', 10);
-  await ensureStaffUsers(passwordHash);
+  await ensurePrimaryAdmin();
   const lifting = await ensureLiftingDept();
   const certByCode = await upsertCertCatalog();
   const { upserted, removed } = await upsertInspectorUsersAndCerts(lifting.id, certByCode, passwordHash);
@@ -296,7 +284,7 @@ async function main() {
   console.log(`Clients upserted: ${clients}`);
   console.log(`Cert catalog: ${CERTIFICATION_CATALOG.length} codes`);
   console.log('QP Approved Inspector → Inspector.qeApproved (Sooraj is trainer-only, qeApproved=false)');
-  console.log('Staff logins: admin@ / coordinator@ / manager@ irppms.local + password123');
+  console.log('Admin login: fahad.mp@applus.com (see seedDefaults / ensure-fahad-admin)');
   console.log('Inspector logins: work email + password123');
   console.log('Cert dates: placeholder 2024-01-01 → 2029-01-01 (Valid)');
 }

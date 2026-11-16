@@ -25,6 +25,8 @@ export type AppIdentity = {
   role: UserRole;
   fullName: string;
   inspectorId: number | null;
+  /** Empty = all departments. Non-empty = CM-022 scoped access. */
+  departmentIds: number[];
 };
 
 export async function resolveInspectorIdForUser(user: { id: number; email: string }): Promise<number | null> {
@@ -34,21 +36,37 @@ export async function resolveInspectorIdForUser(user: { id: number; email: strin
   return byEmail?.id ?? null;
 }
 
-export function toAppIdentity(user: User, inspectorId: number | null): AppIdentity {
+export async function resolveDepartmentIdsForUser(userId: number): Promise<number[]> {
+  const rows = await prisma.userDepartmentAccess.findMany({
+    where: { userId },
+    select: { departmentId: true },
+  });
+  return rows.map((r) => r.departmentId);
+}
+
+export function toAppIdentity(
+  user: User,
+  inspectorId: number | null,
+  departmentIds: number[] = []
+): AppIdentity {
   return {
     id: user.id,
     email: user.email,
     role: user.role,
     fullName: user.fullName,
     inspectorId,
+    departmentIds,
   };
 }
 
 export async function loadSessionUser(userId: number): Promise<AppIdentity | null> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return null;
-  const inspectorId = await resolveInspectorIdForUser(user);
-  return toAppIdentity(user, inspectorId);
+  const [inspectorId, departmentIds] = await Promise.all([
+    resolveInspectorIdForUser(user),
+    resolveDepartmentIdsForUser(user.id),
+  ]);
+  return toAppIdentity(user, inspectorId, departmentIds);
 }
 
 /** Local email+password. Entra users (no passwordHash / identityProvider=entra) cannot use this path. */
@@ -59,8 +77,11 @@ export async function authenticateLocal(email: string, password: string): Promis
   if (user.identityProvider !== 'local' || !user.passwordHash) return null;
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return null;
-  const inspectorId = await resolveInspectorIdForUser(user);
-  return toAppIdentity(user, inspectorId);
+  const [inspectorId, departmentIds] = await Promise.all([
+    resolveInspectorIdForUser(user),
+    resolveDepartmentIdsForUser(user.id),
+  ]);
+  return toAppIdentity(user, inspectorId, departmentIds);
 }
 
 /**

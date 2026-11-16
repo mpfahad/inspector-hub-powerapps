@@ -59,10 +59,13 @@ export function allocationsForDay(allocations: PlannerAllocation[], inspectorId:
   return allocations.filter((a) => a.inspectorId === inspectorId && iso >= a.start && iso <= a.end);
 }
 
+/** Partial = less than 6h booked that day (planner shows half bar). */
+export const HALF_DAY_HOURS = 6;
+
 export function bandForHours(hours: number, hasOff: boolean): UtilizationBand {
   if (hasOff) return 'off';
   if (hours <= 0) return 'available';
-  if (hours < 5) return 'partial';
+  if (hours < HALF_DAY_HOURS) return 'partial';
   if (hours < STANDARD_DAY_HOURS) return 'heavy';
   return 'full';
 }

@@ -97,7 +97,16 @@ function crudRouter(model: 'client' | 'inspector' | 'department' | 'certificatio
       );
       return;
     }
-    if (model === 'department') res.json(await prisma.department.findMany());
+    if (model === 'department') {
+      const allowed = req.user?.departmentIds ?? [];
+      res.json(
+        await prisma.department.findMany({
+          where: allowed.length > 0 ? { id: { in: allowed } } : undefined,
+          orderBy: { name: 'asc' },
+        })
+      );
+      return;
+    }
     if (model === 'certification') {
       res.json(await prisma.certification.findMany({ orderBy: { code: 'asc' } }));
     }

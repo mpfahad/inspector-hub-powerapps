@@ -18,7 +18,7 @@ async function ensureRigsDept() {
       data: {
         name: 'Rigs',
         code: 'RIGS',
-        managerEmail: 'manager@irppms.local',
+        managerEmail: 'fahad.mp@applus.com',
       },
     });
   }

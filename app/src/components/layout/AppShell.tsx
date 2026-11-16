@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api, type Department } from '../../lib/api';
@@ -34,16 +34,17 @@ export function AppShell() {
   const [pendingCount, setPendingCount] = useState(0);
   const [signingOut, setSigningOut] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
-  /** Accordion: at most one department expanded. Null = all collapsed (stays until user expands). */
-  const [openDeptCode, setOpenDeptCode] = useState<string | null>(null);
-  const prevActiveDeptRef = useRef<string | null>(null);
 
   const isStaff = user?.role !== 'Inspector';
 
-  const visibleDepartments = useMemo(
-    () => departments.filter((d) => !isPlaceholderDept(d)),
-    [departments]
-  );
+  const visibleDepartments = useMemo(() => {
+    const allowed = user?.departmentIds ?? [];
+    return departments.filter((d) => {
+      if (isPlaceholderDept(d)) return false;
+      if (allowed.length === 0) return true;
+      return allowed.includes(d.id);
+    });
+  }, [departments, user?.departmentIds]);
 
   useEffect(() => {
     if (user?.role !== 'Inspector') return;
@@ -63,22 +64,17 @@ export function AppShell() {
     return m?.[1]?.toUpperCase() ?? null;
   }, [location.pathname]);
 
-  // Only auto-expand when entering or switching to a department route.
-  // Leaving for Clients/Dashboard, or manually collapsing, stays collapsed.
-  useEffect(() => {
-    if (!activeDeptCode) {
-      prevActiveDeptRef.current = null;
-      return;
-    }
-    if (!visibleDepartments.some((d) => d.code.toUpperCase() === activeDeptCode)) return;
-
-    const prev = prevActiveDeptRef.current;
-    if (activeDeptCode !== prev) {
-      setOpenDeptCode(activeDeptCode);
-      rememberDeptCode(activeDeptCode);
-    }
-    prevActiveDeptRef.current = activeDeptCode;
+  /** Only the selected department appears in the sidebar (picked from home cards). */
+  const activeDepartment = useMemo(() => {
+    if (!activeDeptCode) return null;
+    return (
+      visibleDepartments.find((d) => d.code.toUpperCase() === activeDeptCode) ?? null
+    );
   }, [activeDeptCode, visibleDepartments]);
+
+  useEffect(() => {
+    if (activeDepartment) rememberDeptCode(activeDepartment.code);
+  }, [activeDepartment]);
 
   const handleSignOut = async () => {
     if (signingOut) return;
@@ -91,29 +87,12 @@ export function AppShell() {
     }
   };
 
-  const openDept = (code: string, navigateToJobs: boolean) => {
-    setOpenDeptCode(code);
-    rememberDeptCode(code);
-    if (navigateToJobs) {
-      const dept = visibleDepartments.find((d) => d.code.toUpperCase() === code);
-      if (dept) navigate(`/d/${dept.code}/jobs`);
-    }
-  };
-
-  const toggleDept = (code: string) => {
-    if (openDeptCode === code) {
-      setOpenDeptCode(null);
-      return;
-    }
-    openDept(code, activeDeptCode !== code);
-  };
-
   return (
     <div className="flex min-h-screen">
       <aside className="w-60 shrink-0 border-r border-slate-200 bg-white p-4 flex flex-col">
         <div className="mb-6">
-          <div className="text-lg font-bold text-navy">IRPPMS</div>
-          <div className="text-[10px] uppercase tracking-wider text-slate-500">Inspector Platform</div>
+          <div className="text-lg font-bold text-navy">Inspection Hub</div>
+          <div className="text-[10px] uppercase tracking-wider text-slate-500">Resource planning</div>
           <div className="mt-2 text-xs text-slate-600">{user?.fullName}</div>
           <div className="text-xs text-teal font-medium">{user?.role}</div>
         </div>
@@ -151,73 +130,47 @@ export function AppShell() {
                   }`
                 }
               >
-                Dashboard
+                Departments
               </NavLink>
 
-              <div className="mt-3 mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Departments
-              </div>
-              {visibleDepartments.map((d) => {
-                const code = d.code.toUpperCase();
-                const open = openDeptCode === code;
-                const active = activeDeptCode === code;
-                return (
-                  <div key={d.id} className="mb-1">
-                    <div
-                      className={`flex items-stretch rounded-lg overflow-hidden ${
-                        active
-                          ? 'bg-navy text-white'
-                          : open
-                            ? 'bg-slate-100 text-navy'
-                            : 'text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => openDept(code, true)}
-                        className={`flex-1 min-w-0 px-3 py-2.5 text-sm text-left truncate ${
-                          active ? 'font-medium' : ''
-                        }`}
-                        title={d.name}
-                      >
-                        {d.name}
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={open ? `Collapse ${d.name}` : `Expand ${d.name}`}
-                        aria-expanded={open}
-                        onClick={() => toggleDept(code)}
-                        className={`shrink-0 w-10 flex items-center justify-center border-l text-base leading-none ${
-                          active
-                            ? 'border-white/20 text-white/90 hover:bg-white/10'
-                            : 'border-slate-200/80 text-slate-500 hover:bg-slate-200/60'
-                        }`}
-                      >
-                        {open ? '▾' : '▸'}
-                      </button>
-                    </div>
-                    {open && (
-                      <div className="ml-2 mt-0.5 flex flex-col gap-0.5 border-l border-slate-200 pl-2">
-                        {deptChildLinks.map((child) => (
-                          <NavLink
-                            key={child.suffix}
-                            to={`/d/${d.code}/${child.suffix}`}
-                            className={({ isActive }) =>
-                              `rounded-md px-2.5 py-1.5 text-xs ${
-                                isActive
-                                  ? 'bg-teal/10 text-navy font-medium'
-                                  : 'text-slate-500 hover:bg-slate-50 hover:text-navy'
-                              }`
-                            }
-                          >
-                            {child.label}
-                          </NavLink>
-                        ))}
-                      </div>
-                    )}
+              {activeDepartment ? (
+                <div className="mt-3">
+                  <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    Working in
                   </div>
-                );
-              })}
+                  <div className="rounded-lg bg-navy text-white px-3 py-2.5 text-sm font-medium truncate mb-1">
+                    {activeDepartment.name}
+                  </div>
+                  <div className="ml-1 flex flex-col gap-0.5 border-l border-slate-200 pl-2">
+                    {deptChildLinks.map((child) => (
+                      <NavLink
+                        key={child.suffix}
+                        to={`/d/${activeDepartment.code}/${child.suffix}`}
+                        className={({ isActive }) =>
+                          `rounded-md px-2.5 py-1.5 text-xs ${
+                            isActive
+                              ? 'bg-teal/10 text-navy font-medium'
+                              : 'text-slate-500 hover:bg-slate-50 hover:text-navy'
+                          }`
+                        }
+                      >
+                        {child.label}
+                      </NavLink>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="mt-2 w-full text-left rounded-lg px-3 py-2 text-xs text-teal hover:bg-teal/5"
+                    onClick={() => navigate('/')}
+                  >
+                    ← All departments
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-3 px-3 text-xs text-slate-400">
+                  Pick a department on the home cards to open its workspace.
+                </p>
+              )}
 
               <div className="mt-3 mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                 Shared
@@ -236,7 +189,19 @@ export function AppShell() {
           )}
         </nav>
 
-        <div className="mt-4 pt-4 border-t border-slate-200">
+        <div className="mt-4 pt-4 border-t border-slate-200 space-y-1">
+          {isStaff && (
+            <NavLink
+              to="/settings"
+              className={({ isActive }) =>
+                `rounded-lg px-3 py-2 text-sm block ${
+                  isActive ? 'bg-teal/10 text-navy font-medium' : 'text-slate-600 hover:bg-slate-50'
+                }`
+              }
+            >
+              Settings
+            </NavLink>
+          )}
           <button
             type="button"
             onClick={handleSignOut}

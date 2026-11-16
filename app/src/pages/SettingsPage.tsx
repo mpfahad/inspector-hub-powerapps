@@ -132,10 +132,12 @@ export function SettingsPage() {
     load();
   }, [isAdmin]);
 
-  const assignableDepartments = useMemo(
+  /** HOLD/Unassigned is a system bucket (rehome on dept delete) — hide from Settings UI. */
+  const visibleDepartments = useMemo(
     () => departments.filter((x) => x.code.toUpperCase() !== 'HOLD'),
     [departments]
   );
+  const assignableDepartments = visibleDepartments;
 
   const filteredUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase();
@@ -159,8 +161,9 @@ export function SettingsPage() {
   );
 
   const allDeptsSelected = useMemo(
-    () => departments.length > 0 && departments.every((d) => selectedDepts.has(d.id)),
-    [departments, selectedDepts]
+    () =>
+      visibleDepartments.length > 0 && visibleDepartments.every((d) => selectedDepts.has(d.id)),
+    [visibleDepartments, selectedDepts]
   );
 
   if (!isAdmin) {
@@ -579,8 +582,9 @@ export function SettingsPage() {
                     type="checkbox"
                     checked={allDeptsSelected}
                     onChange={(e) => {
-                      if (e.target.checked) setSelectedDepts(new Set(departments.map((d) => d.id)));
-                      else setSelectedDepts(new Set());
+                      if (e.target.checked) {
+                        setSelectedDepts(new Set(visibleDepartments.map((d) => d.id)));
+                      } else setSelectedDepts(new Set());
                     }}
                     aria-label="Select all departments"
                   />
@@ -592,7 +596,7 @@ export function SettingsPage() {
               </tr>
             </thead>
             <tbody>
-              {departments.map((d) => (
+              {visibleDepartments.map((d) => (
                 <tr key={d.id} className="border-t border-slate-50">
                   <td className="p-3">
                     <input
@@ -610,16 +614,12 @@ export function SettingsPage() {
                     />
                   </td>
                   <td className="p-3">
-                    {d.code.toUpperCase() === 'HOLD' ? (
-                      <span className="font-medium text-navy">{d.name}</span>
-                    ) : (
-                      <Link
-                        to={`/d/${encodeURIComponent(d.code)}/jobs`}
-                        className="font-medium text-teal hover:underline"
-                      >
-                        {d.name}
-                      </Link>
-                    )}
+                    <Link
+                      to={`/d/${encodeURIComponent(d.code)}/jobs`}
+                      className="font-medium text-teal hover:underline"
+                    >
+                      {d.name}
+                    </Link>
                   </td>
                   <td className="p-3 font-mono text-slate-600">{d.code}</td>
                   <td className="p-3 text-slate-600">{d.managerEmail || '—'}</td>
@@ -634,7 +634,7 @@ export function SettingsPage() {
                   </td>
                 </tr>
               ))}
-              {departments.length === 0 && (
+              {visibleDepartments.length === 0 && (
                 <tr>
                   <td colSpan={5} className="p-4 text-sm text-slate-500">
                     No departments yet. Add one to get started.

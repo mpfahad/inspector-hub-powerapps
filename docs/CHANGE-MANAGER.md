@@ -56,6 +56,7 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 | CM-027 | 2026-11-15 | **Admin users:** primary Admin account; Settings to add/edit users, assign roles & departments, bulk CSV/TSV import, generate/reset random passwords and export CSV once. | Stakeholder | Implemented | 2026-11-15: Seed/startup ensures `fahad.mp@applus.com` as Admin (password set in UAT; not overwritten on later startups). Settings: create/edit, dept access, bulk import (`POST /api/users/bulk-import`), multi-select reset (`POST /api/users/reset-passwords`), one-time password export CSV. Script: `server/scripts/ensure-fahad-admin.ts`. **2026-11-16:** Removed generic demo staff (`coordinator@` / `manager@` / `admin@irppms.local`); login prefills Fahad admin; create other users from Settings. Added Lifting+Rigs Coordinators (Nisha, Ezhil, Lester, Rosmi, Steve) with temp passwords. |
 | CM-028 | 2026-11-16 | **Browser tab title** shows product name **Inspection Hub** (not generic “app”). | Stakeholder | Implemented | 2026-11-16: `app/index.html` + `document.title` in `main.tsx`. |
 | CM-029 | 2026-11-16 | **Live Docker pack** for other PC beside Training Manager / Contract App: production API + nginx web images; compose with persistent SQLite volume; **no seed on start**; runbook to import UAT DB. | Stakeholder | Implemented | 2026-11-16: `docker-compose.yml` (ports 5180/4100); `server/Dockerfile` + `docker-entrypoint.sh` (`prisma db push` only); `app/Dockerfile` + `nginx.conf` (`/api` proxy); optional `--profile seed`; [`.env.example`](../.env.example); runbook [`docs/DOCKER-LIVE.md`](./DOCKER-LIVE.md). Keep using `docker-compose.dev.yml` only for wipe-ok local hot reload. **Fix:** `COOKIE_SECURE=false` now honored under `NODE_ENV=production` (LAN HTTP login was succeeding then dropping the Secure cookie with no error). |
+| CM-030 | 2026-11-16 | **Settings:** Admin can **add/edit departments** (name, code, manager email). User management has a **search box** (name, email, role, department). | Stakeholder | Implemented | 2026-11-16: `POST/PUT /api/departments` (Admin); Settings Departments card + user list filter. |
 
 ---
 
@@ -68,4 +69,4 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 
 ---
 
-*Last updated: 2026-11-16 (CM-022–CM-029 live Docker pack)*
+*Last updated: 2026-11-16 (CM-030 Settings departments + user search)*

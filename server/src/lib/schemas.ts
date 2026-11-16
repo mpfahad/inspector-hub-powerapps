@@ -79,6 +79,18 @@ export const resetPasswordsSchema = z.object({
   userIds: z.array(z.coerce.number().int().positive()).min(1).max(200),
 });
 
+export const createDepartmentSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  code: z.string().trim().min(1).max(20),
+  managerEmail: z.string().trim().email().max(320).optional().nullable(),
+});
+
+export const updateDepartmentSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  code: z.string().trim().min(1).max(20).optional(),
+  managerEmail: z.string().trim().email().max(320).optional().nullable(),
+});
+
 export const updateJobSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   scope: z.string().trim().max(8000).optional().nullable(),

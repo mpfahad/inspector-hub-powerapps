@@ -212,6 +212,12 @@ export const api = {
     }
   ) => request<Client>(`/api/clients/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   departments: () => request<Department[]>('/api/departments'),
+  createDepartment: (data: { name: string; code: string; managerEmail?: string | null }) =>
+    request<Department>('/api/departments', { method: 'POST', body: JSON.stringify(data) }),
+  updateDepartment: (
+    id: number,
+    data: { name?: string; code?: string; managerEmail?: string | null }
+  ) => request<Department>(`/api/departments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   users: () => request<AppUserAccount[]>('/api/users'),
   createUser: (data: {
     email: string;
@@ -446,7 +452,7 @@ export type Client = {
   contact?: string | null;
   email?: string | null;
 };
-export type Department = { id: number; name: string; code: string };
+export type Department = { id: number; name: string; code: string; managerEmail?: string | null };
 export type Certification = { id: number; code: string; name: string; issuer?: string | null };
 export type InspectorCert = {
   id: number;

@@ -70,6 +70,12 @@ type FormState = {
   departmentIds: number[];
 };
 
+type DeptFormState = {
+  name: string;
+  code: string;
+  managerEmail: string;
+};
+
 const emptyForm = (): FormState => ({
   fullName: '',
   email: '',
@@ -77,6 +83,12 @@ const emptyForm = (): FormState => ({
   password: '',
   allDepartments: true,
   departmentIds: [],
+});
+
+const emptyDeptForm = (): DeptFormState => ({
+  name: '',
+  code: '',
+  managerEmail: '',
 });
 
 export function SettingsPage() {
@@ -96,13 +108,17 @@ export function SettingsPage() {
   const [bulkText, setBulkText] = useState('');
   const [showBulk, setShowBulk] = useState(false);
   const [resetExisting, setResetExisting] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
+  const [showDeptForm, setShowDeptForm] = useState(false);
+  const [editingDeptId, setEditingDeptId] = useState<number | null>(null);
+  const [deptForm, setDeptForm] = useState<DeptFormState>(emptyDeptForm());
 
   const load = () => {
     if (!isAdmin) return;
     Promise.all([api.users(), api.departments()])
       .then(([u, d]) => {
         setUsers(u);
-        setDepartments(d.filter((x) => x.code.toUpperCase() !== 'HOLD'));
+        setDepartments(d);
         setError('');
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load users'));
@@ -112,9 +128,30 @@ export function SettingsPage() {
     load();
   }, [isAdmin]);
 
+  const assignableDepartments = useMemo(
+    () => departments.filter((x) => x.code.toUpperCase() !== 'HOLD'),
+    [departments]
+  );
+
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter(
+      (u) =>
+        u.fullName.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        u.role.toLowerCase().includes(q) ||
+        (u.allDepartments
+          ? 'all'.includes(q)
+          : u.departments.some(
+              (d) => d.name.toLowerCase().includes(q) || d.code.toLowerCase().includes(q)
+            ))
+    );
+  }, [users, userSearch]);
+
   const allSelected = useMemo(
-    () => users.length > 0 && users.every((u) => selected.has(u.id)),
-    [users, selected]
+    () => filteredUsers.length > 0 && filteredUsers.every((u) => selected.has(u.id)),
+    [filteredUsers, selected]
   );
 
   if (!isAdmin) {
@@ -299,12 +336,54 @@ export function SettingsPage() {
     ]);
   };
 
+  const openCreateDept = () => {
+    setEditingDeptId(null);
+    setDeptForm(emptyDeptForm());
+    setShowDeptForm(true);
+  };
+
+  const openEditDept = (d: Department) => {
+    setEditingDeptId(d.id);
+    setDeptForm({
+      name: d.name,
+      code: d.code,
+      managerEmail: d.managerEmail ?? '',
+    });
+    setShowDeptForm(true);
+  };
+
+  const submitDept = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const payload = {
+        name: deptForm.name.trim(),
+        code: deptForm.code.trim().toUpperCase(),
+        managerEmail: deptForm.managerEmail.trim() || null,
+      };
+      if (editingDeptId) {
+        await api.updateDepartment(editingDeptId, payload);
+      } else {
+        await api.createDepartment(payload);
+      }
+      setShowDeptForm(false);
+      setEditingDeptId(null);
+      setDeptForm(emptyDeptForm());
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save department');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-navy">Settings</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Add users, assign roles and departments, bulk-import, and export temporary passwords.
+          Manage departments, users, roles, and temporary passwords.
         </p>
       </div>
 
@@ -349,6 +428,111 @@ export function SettingsPage() {
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
           <div>
+            <h2 className="font-semibold text-navy">Departments</h2>
+            <p className="text-xs text-slate-500">Add or edit department name, code, and manager email</p>
+          </div>
+          <button type="button" className="btn-primary text-sm" onClick={openCreateDept}>
+            Add department
+          </button>
+        </div>
+
+        {showDeptForm && (
+          <form onSubmit={submitDept} className="p-4 border-b border-slate-100 space-y-3 bg-slate-50/50">
+            <h3 className="text-sm font-semibold text-navy">
+              {editingDeptId ? 'Edit department' : 'Add department'}
+            </h3>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-slate-500">Name</label>
+                <input
+                  className="input mt-1"
+                  required
+                  value={deptForm.name}
+                  onChange={(e) => setDeptForm({ ...deptForm, name: e.target.value })}
+                  placeholder="Lifting"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500">Code</label>
+                <input
+                  className="input mt-1 font-mono uppercase"
+                  required
+                  value={deptForm.code}
+                  onChange={(e) => setDeptForm({ ...deptForm, code: e.target.value.toUpperCase() })}
+                  placeholder="LIFT"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500">Manager email (optional)</label>
+                <input
+                  className="input mt-1"
+                  type="email"
+                  value={deptForm.managerEmail}
+                  onChange={(e) => setDeptForm({ ...deptForm, managerEmail: e.target.value })}
+                  placeholder="manager@applus.com"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button type="submit" className="btn-primary text-sm" disabled={saving}>
+                {saving ? 'Saving…' : editingDeptId ? 'Save department' : 'Create department'}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary text-sm"
+                onClick={() => {
+                  setShowDeptForm(false);
+                  setEditingDeptId(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase text-slate-500 border-b border-slate-100">
+              <tr>
+                <th className="p-3">Name</th>
+                <th className="p-3">Code</th>
+                <th className="p-3">Manager</th>
+                <th className="p-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {departments.map((d) => (
+                <tr key={d.id} className="border-t border-slate-50">
+                  <td className="p-3 font-medium text-navy">{d.name}</td>
+                  <td className="p-3 font-mono text-slate-600">{d.code}</td>
+                  <td className="p-3 text-slate-600">{d.managerEmail || '—'}</td>
+                  <td className="p-3 text-right">
+                    <button
+                      type="button"
+                      className="text-xs text-teal hover:underline"
+                      onClick={() => openEditDept(d)}
+                    >
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {departments.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="p-4 text-sm text-slate-500">
+                    No departments yet. Add one to get started.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
+          <div>
             <h2 className="font-semibold text-navy">Users & access</h2>
             <p className="text-xs text-slate-500">Empty department list = all departments</p>
           </div>
@@ -378,6 +562,20 @@ export function SettingsPage() {
               Add user
             </button>
           </div>
+        </div>
+
+        <div className="px-4 py-3 border-b border-slate-100">
+          <label className="sr-only" htmlFor="user-search">
+            Search users
+          </label>
+          <input
+            id="user-search"
+            className="input"
+            type="search"
+            placeholder="Search by name, email, role, or department…"
+            value={userSearch}
+            onChange={(e) => setUserSearch(e.target.value)}
+          />
         </div>
 
         {showBulk && (
@@ -480,7 +678,7 @@ export function SettingsPage() {
             </label>
             {!form.allDepartments && (
               <div className="flex flex-wrap gap-2">
-                {departments.map((d) => (
+                {assignableDepartments.map((d) => (
                   <button
                     key={d.id}
                     type="button"
@@ -523,7 +721,7 @@ export function SettingsPage() {
                     type="checkbox"
                     checked={allSelected}
                     onChange={(e) => {
-                      if (e.target.checked) setSelected(new Set(users.map((u) => u.id)));
+                      if (e.target.checked) setSelected(new Set(filteredUsers.map((u) => u.id)));
                       else setSelected(new Set());
                     }}
                     aria-label="Select all users"
@@ -536,7 +734,7 @@ export function SettingsPage() {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {filteredUsers.map((u) => (
                 <tr key={u.id} className="border-t border-slate-50">
                   <td className="p-3">
                     <input
@@ -570,6 +768,13 @@ export function SettingsPage() {
                   </td>
                 </tr>
               ))}
+              {filteredUsers.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-4 text-sm text-slate-500">
+                    {userSearch.trim() ? 'No users match that search.' : 'No users yet.'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

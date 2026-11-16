@@ -14,9 +14,6 @@ import {
   inspectorQeApprovedSchema,
 } from '../lib/schemas.js';
 import { geocodeSampleLocation } from '../lib/geo.js';
-import bcrypt from 'bcryptjs';
-import { IdentityProvider, UserRole } from '@prisma/client';
-
 const staffRoles = ['Coordinator', 'Manager', 'Admin'] as const;
 
 /** Strip internal cost fields unless caller is Admin (CM-013). */
@@ -289,27 +286,14 @@ function crudRouter(model: 'client' | 'inspector' | 'department' | 'certificatio
       }
 
       const email = body.email?.trim() ? body.email.trim().toLowerCase() : null;
-      let userId: number | null = null;
+      // CM-033: no Inspector User logins — roster email is contact only.
       if (email) {
         const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
-          if (existingUser.role !== UserRole.Inspector) {
-            res.status(409).json({ error: 'Email belongs to a non-inspector user' });
-            return;
-          }
-          userId = existingUser.id;
-        } else {
-          const passwordHash = await bcrypt.hash('password123', 10);
-          const user = await prisma.user.create({
-            data: {
-              email,
-              passwordHash,
-              fullName: body.name,
-              role: UserRole.Inspector,
-              identityProvider: IdentityProvider.local,
-            },
+          res.status(409).json({
+            error: 'Email already belongs to a login account (Admin/Manager/Coordinator)',
           });
-          userId = user.id;
+          return;
         }
       }
 
@@ -319,7 +303,7 @@ function crudRouter(model: 'client' | 'inspector' | 'department' | 'certificatio
           name: body.name,
           departmentId: body.departmentId,
           email,
-          userId,
+          userId: null,
           jobTitle: body.jobTitle || null,
           hireDate: body.hireDate ? new Date(body.hireDate + 'T12:00:00') : null,
           baseLocation: body.baseLocation || null,

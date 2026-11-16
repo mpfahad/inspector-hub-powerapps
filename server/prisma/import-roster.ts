@@ -74,8 +74,7 @@ async function findInspector(row: (typeof FIELD_INSPECTOR_ROSTER)[number]) {
 
 async function upsertInspectorUsersAndCerts(
   liftingDeptId: number,
-  certByCode: Map<string, number>,
-  passwordHash: string
+  certByCode: Map<string, number>
 ) {
   const keepEmployeeNos = new Set(FIELD_INSPECTOR_ROSTER.map((r) => r.employeeNo));
   const keepNames = new Set(FIELD_INSPECTOR_ROSTER.flatMap((r) => rosterMatchNames(r)));
@@ -126,29 +125,8 @@ async function upsertInspectorUsersAndCerts(
       });
     }
 
-    let user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          email,
-          passwordHash,
-          fullName: row.name,
-          role: UserRole.Inspector,
-          identityProvider: IdentityProvider.local,
-        },
-      });
-    } else {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          passwordHash,
-          fullName: row.name,
-          role: UserRole.Inspector,
-          identityProvider: IdentityProvider.local,
-        },
-      });
-    }
-    await prisma.inspector.update({ where: { id: inspectorId }, data: { userId: user.id } });
+    // CM-033: no Inspector User logins — keep contact email on Inspector only.
+    await prisma.inspector.update({ where: { id: inspectorId }, data: { userId: null } });
 
     await prisma.inspectorCert.deleteMany({ where: { inspectorId } });
     for (const code of row.certCodes) {
@@ -271,12 +249,25 @@ async function ensurePrimaryAdmin() {
 }
 
 async function main() {
-  const passwordHash = await bcrypt.hash('password123', 10);
   await ensurePrimaryAdmin();
   const lifting = await ensureLiftingDept();
   const certByCode = await upsertCertCatalog();
-  const { upserted, removed } = await upsertInspectorUsersAndCerts(lifting.id, certByCode, passwordHash);
+  const { upserted, removed } = await upsertInspectorUsersAndCerts(lifting.id, certByCode);
   const clients = await upsertClients();
+
+  // CM-033: drop any leftover Inspector User accounts from older imports
+  const inspectorUsers = await prisma.user.findMany({
+    where: { role: UserRole.Inspector },
+    select: { id: true },
+  });
+  if (inspectorUsers.length > 0) {
+    const ids = inspectorUsers.map((u) => u.id);
+    await prisma.$transaction([
+      prisma.inspector.updateMany({ where: { userId: { in: ids } }, data: { userId: null } }),
+      prisma.auditEvent.updateMany({ where: { userId: { in: ids } }, data: { userId: null } }),
+      prisma.user.deleteMany({ where: { id: { in: ids } } }),
+    ]);
+  }
 
   console.log('');
   console.log(`Department: ${lifting.name} (${lifting.code})`);
@@ -285,7 +276,8 @@ async function main() {
   console.log(`Cert catalog: ${CERTIFICATION_CATALOG.length} codes`);
   console.log('QP Approved Inspector → Inspector.qeApproved (Sooraj is trainer-only, qeApproved=false)');
   console.log('Admin login: fahad.mp@applus.com (see seedDefaults / ensure-fahad-admin)');
-  console.log('Inspector logins: work email + password123');
+  console.log('Inspector field logins: disabled (CM-033) — staff only');
+  console.log(`Purged Inspector logins: ${inspectorUsers.length}`);
   console.log('Cert dates: placeholder 2024-01-01 → 2029-01-01 (Valid)');
 }
 

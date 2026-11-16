@@ -77,7 +77,7 @@ router.post('/', validateBody(createUserSchema), async (req, res) => {
   const body = req.body as {
     email: string;
     fullName: string;
-    role: 'Admin' | 'Manager' | 'Coordinator' | 'Inspector';
+    role: 'Admin' | 'Manager' | 'Coordinator';
     password?: string;
     departmentIds?: number[];
   };
@@ -206,7 +206,7 @@ router.post('/bulk-import', validateBody(bulkImportUsersSchema), async (req, res
     users: {
       email: string;
       fullName: string;
-      role: 'Admin' | 'Manager' | 'Coordinator' | 'Inspector';
+      role: 'Admin' | 'Manager' | 'Coordinator';
       departmentCodes?: string[];
     }[];
     resetExistingPasswords?: boolean;

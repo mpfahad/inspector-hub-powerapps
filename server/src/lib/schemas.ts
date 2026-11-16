@@ -42,17 +42,20 @@ export const createJobSchema = z.object({
   teamSlots: z.array(teamSlotSchema).max(20).optional(),
 });
 
+/** Staff app logins only — Inspector field staff no longer get User accounts (CM-033). */
+const staffLoginRole = z.enum(['Admin', 'Manager', 'Coordinator']);
+
 export const createUserSchema = z.object({
   email: z.string().trim().email().max(320),
   fullName: z.string().trim().min(1).max(120),
-  role: z.enum(['Admin', 'Manager', 'Coordinator', 'Inspector']),
+  role: staffLoginRole,
   password: z.string().min(8).max(200).optional(),
   departmentIds: z.array(z.coerce.number().int().positive()).optional(),
 });
 
 export const updateUserSchema = z.object({
   fullName: z.string().trim().min(1).max(120).optional(),
-  role: z.enum(['Admin', 'Manager', 'Coordinator', 'Inspector']).optional(),
+  role: staffLoginRole.optional(),
   password: z.string().min(8).max(200).optional(),
   /** Empty array = all departments. Omit to leave unchanged. */
   departmentIds: z.array(z.coerce.number().int().positive()).optional(),
@@ -64,7 +67,7 @@ export const bulkImportUsersSchema = z.object({
       z.object({
         email: z.string().trim().email().max(320),
         fullName: z.string().trim().min(1).max(120),
-        role: z.enum(['Admin', 'Manager', 'Coordinator', 'Inspector']).default('Coordinator'),
+        role: staffLoginRole.default('Coordinator'),
         /** Dept codes e.g. LIFT,RIGS — empty = all departments */
         departmentCodes: z.array(z.string().trim().min(1).max(40)).optional(),
       })

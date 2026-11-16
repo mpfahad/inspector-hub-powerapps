@@ -89,8 +89,25 @@ export async function ensureInspectorCostHistoryBaseline() {
   }
 }
 
+/** CM-033: staff-only logins — drop Inspector User accounts; keep employee roster. */
+export async function purgeInspectorLogins() {
+  const inspectors = await prisma.user.findMany({
+    where: { role: 'Inspector' },
+    select: { id: true },
+  });
+  if (inspectors.length === 0) return 0;
+  const ids = inspectors.map((u) => u.id);
+  await prisma.$transaction([
+    prisma.inspector.updateMany({ where: { userId: { in: ids } }, data: { userId: null } }),
+    prisma.auditEvent.updateMany({ where: { userId: { in: ids } }, data: { userId: null } }),
+    prisma.user.deleteMany({ where: { id: { in: ids } } }),
+  ]);
+  return ids.length;
+}
+
 export async function applyProductDefaults() {
   await ensurePrimaryAdmin();
+  await purgeInspectorLogins();
   await ensureClientCoordinates();
   await ensureJobCoordinates();
   await ensurePriceChartDefaults();

@@ -14,6 +14,7 @@
     "db:import-rigs": "tsx prisma/import-rigs-roster.ts",
     "db:backfill-jobtype-depts": "tsx prisma/backfill-jobtype-departments.ts",
     "db:seed-sample-jobs": "tsx prisma/seed-sample-jobs.ts",
+    "db:purge-inspector-logins": "tsx scripts/purge-inspector-logins.ts",
     "db:reset": "prisma migrate reset --force"
   },
   "dependencies": {

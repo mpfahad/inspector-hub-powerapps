@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, type AppUserAccount, type Department } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
-const ROLES = ['Admin', 'Manager', 'Coordinator', 'Inspector'] as const;
+const ROLES = ['Admin', 'Manager', 'Coordinator'] as const;
 
 function randomTempPassword() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';

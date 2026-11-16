@@ -36,7 +36,6 @@ async function main() {
   await prisma.user.deleteMany();
 
   const adminHash = await bcrypt.hash('ApplusHub2026!', 10);
-  const inspectorHash = await bcrypt.hash('password123', 10);
 
   await prisma.user.create({
     data: {
@@ -180,16 +179,7 @@ async function main() {
       },
     });
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash: inspectorHash,
-        fullName: row.name,
-        role: UserRole.Inspector,
-        identityProvider: IdentityProvider.local,
-      },
-    });
-    await prisma.inspector.update({ where: { id: inspector.id }, data: { userId: user.id } });
+    // CM-033: no Inspector User logins — roster contact email only on Inspector.
 
     await prisma.inspectorCostHistory.create({
       data: {
@@ -220,7 +210,7 @@ async function main() {
   console.log(`Inspectors: ${FIELD_INSPECTOR_ROSTER.length} | Clients: ${QATAR_CLIENTS.length} | Cert catalog: ${CERTIFICATION_CATALOG.length}`);
   console.log(`QE-approved (QP Approved Inspector): ${qeCount}`);
   console.log('Admin: fahad.mp@applus.com / ApplusHub2026!');
-  console.log('Inspector logins (roster emails): password123');
+  console.log('Inspector field logins: disabled (CM-033) — staff Manager/Coordinator/Admin only');
   console.log('');
   console.log('Prefer live upsert without wipe: npx tsx prisma/import-roster.ts');
   console.log('Sample jobs for reports: npm run db:seed-sample-jobs');

@@ -31,7 +31,11 @@ export function getJwtSecret(): string {
 }
 
 export function sessionCookieOptions() {
-  const secure = process.env.COOKIE_SECURE === 'true' || isProduction;
+  // Explicit COOKIE_SECURE wins (needed for LAN HTTP live Docker with NODE_ENV=production).
+  const secure =
+    process.env.COOKIE_SECURE != null && process.env.COOKIE_SECURE !== ''
+      ? process.env.COOKIE_SECURE === 'true'
+      : isProduction;
   return {
     httpOnly: true,
     sameSite: 'lax' as const,

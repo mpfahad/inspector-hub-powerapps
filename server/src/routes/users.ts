@@ -136,7 +136,7 @@ router.put('/:id', validateBody(updateUserSchema), async (req, res) => {
   }
   const body = req.body as {
     fullName?: string;
-    role?: 'Admin' | 'Manager' | 'Coordinator' | 'Inspector';
+    role?: 'Admin' | 'Manager' | 'Coordinator';
     password?: string;
     departmentIds?: number[];
   };

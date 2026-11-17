@@ -121,6 +121,7 @@ export function JobDetailPage() {
 
   const canAssign = ['Coordinator', 'Manager', 'Admin'].includes(user?.role ?? '');
   const isCoordinator = ['Coordinator', 'Manager', 'Admin'].includes(user?.role ?? '');
+  const isAdminUser = user?.role === 'Admin';
   const isInspector = user?.role === 'Inspector';
   const openAssignment = currentAssignment(job);
   const team = openAssignments(job);
@@ -142,7 +143,10 @@ export function JobDetailPage() {
     if (!isCoordinator || memberEdits.length === 0) return undefined;
     return memberEdits.map((m) => ({
       assignmentId: m.assignmentId,
-      dailyCostUsd: m.dailyCostUsd.trim() === '' ? null : Number(m.dailyCostUsd),
+      // CTC only Admin; staff update billable/job rate only
+      ...(isAdminUser
+        ? { dailyCostUsd: m.dailyCostUsd.trim() === '' ? null : Number(m.dailyCostUsd) }
+        : {}),
       dailyBillableUsd: m.dailyBillableUsd.trim() === '' ? null : Number(m.dailyBillableUsd),
     }));
   };
@@ -387,7 +391,7 @@ export function JobDetailPage() {
           defaultInspectorId={logInspectorId}
           defaultFrom={job.startDate.slice(0, 10)}
           defaultTo={job.endDate.slice(0, 10)}
-          defaultDailyHours={job.rateBasis === 'hourly' ? 8 : 8}
+          defaultDailyHours={job.jobType?.defaultHours ?? 8}
           onChanged={load}
         />
       )}
@@ -444,32 +448,23 @@ export function JobDetailPage() {
               />
             </div>
             <div className="space-y-3">
-              <p className="text-xs font-medium text-slate-500">Inspector rates (editable at complete)</p>
+              <p className="text-xs font-medium text-slate-500">
+                Job rate / billable (editable at complete)
+                {isAdminUser ? ' · CTC is Admin-only on inspector profile' : ''}
+              </p>
               {activeAssignments.map((a) => {
                 const edit = memberEdits.find((m) => m.assignmentId === a.id);
                 return (
                   <div
                     key={a.id}
-                    className="rounded-lg border border-slate-200 p-3 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end"
+                    className="rounded-lg border border-slate-200 p-3 grid grid-cols-1 sm:grid-cols-2 gap-3 items-end"
                   >
                     <div>
                       <div className="text-sm font-medium text-navy">{a.inspector.name}</div>
                       <div className="text-xs text-slate-500">{a.role}</div>
                     </div>
                     <div>
-                      <label className="text-xs">Daily cost (QAR)</label>
-                      <input
-                        className="input mt-1"
-                        type="number"
-                        min="0"
-                        value={edit?.dailyCostUsd ?? ''}
-                        onChange={(e) =>
-                          updateMemberEdit(a.id, { dailyCostUsd: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs">Daily billable (QAR)</label>
+                      <label className="text-xs">Day rate / billable (QAR)</label>
                       <input
                         className="input mt-1"
                         type="number"

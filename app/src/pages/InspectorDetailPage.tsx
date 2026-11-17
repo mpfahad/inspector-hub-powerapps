@@ -286,24 +286,24 @@ export function InspectorDetailPage() {
             <div className="text-xs text-slate-500">Weekly capacity</div>
           </div>
           {isAdminUser && (
-            <>
-              <div className="rounded-lg bg-slate-50 p-3">
-                <div className="text-2xl font-bold text-navy">{formatMoney(inspector.dailyCostUsd)}</div>
-                <div className="text-xs text-slate-500">Daily CTC (QAR)</div>
-              </div>
-              <div className="rounded-lg bg-slate-50 p-3">
-                <div className="text-2xl font-bold text-navy">{formatMoney(inspector.dailyBillableUsd)}</div>
-                <div className="text-xs text-slate-500">Daily billable (QAR)</div>
-              </div>
-            </>
+            <div className="rounded-lg bg-slate-50 p-3">
+              <div className="text-2xl font-bold text-navy">{formatMoney(inspector.dailyCostUsd)}</div>
+              <div className="text-xs text-slate-500">Daily CTC (QAR) · Admin only</div>
+            </div>
+          )}
+          {(isAdminUser || ['Coordinator', 'Manager'].includes(user?.role ?? '')) && (
+            <div className="rounded-lg bg-slate-50 p-3">
+              <div className="text-2xl font-bold text-navy">{formatMoney(inspector.dailyBillableUsd)}</div>
+              <div className="text-xs text-slate-500">Day rate / billable (QAR)</div>
+            </div>
           )}
         </div>
 
         {isAdminUser && (
           <div className="mt-6 pt-4 border-t border-slate-100 space-y-3">
-            <h3 className="text-sm font-semibold text-navy">Update daily cost / billable</h3>
+            <h3 className="text-sm font-semibold text-navy">Update CTC & billable (Admin)</h3>
             <p className="text-xs text-slate-500">
-              Current values apply to new assignments (snapshotted at assign). History keeps earlier rates.
+              CTC is Admin-only. Billable is the commercial day rate used on jobs when no job-type price is set.
             </p>
             <div className="grid sm:grid-cols-2 gap-3 max-w-lg">
               <div>
@@ -317,7 +317,7 @@ export function InspectorDetailPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-slate-500">Daily billable (QAR)</label>
+                <label className="text-xs text-slate-500">Day rate / billable (QAR)</label>
                 <input
                   className="input mt-1"
                   type="number"

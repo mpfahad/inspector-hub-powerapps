@@ -24,12 +24,11 @@ import {
 import { geocodeSampleLocation } from '../lib/geo.js';
 const staffRoles = ['Coordinator', 'Manager', 'Admin'] as const;
 
-/** Strip internal cost fields unless caller is Admin (CM-013). */
+/** Strip employee CTC/cost unless Admin (CM-013). Billable/job rate stays for staff. */
 function withoutCostFields<T extends Record<string, unknown>>(row: T, admin: boolean): T {
   if (admin) return row;
-  const { dailyCostUsd: _c, dailyBillableUsd: _b, costHistory: _h, ...rest } = row as T & {
+  const { dailyCostUsd: _c, costHistory: _h, ...rest } = row as T & {
     dailyCostUsd?: unknown;
-    dailyBillableUsd?: unknown;
     costHistory?: unknown;
   };
   return rest as T;
@@ -192,6 +191,50 @@ function crudRouter(model: 'client' | 'inspector' | 'department' | 'certificatio
         payload: { code: updated.code, name: updated.name },
       });
       res.json(updated);
+    });
+
+    router.delete('/:id', requireRole(...staffRoles), async (req, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        res.status(400).json({ error: 'Invalid id' });
+        return;
+      }
+      const existing = await prisma.certification.findUnique({
+        where: { id },
+        include: {
+          _count: {
+            select: {
+              inspectorCerts: true,
+              jobTypeRequirements: true,
+              jobRequirements: true,
+            },
+          },
+        },
+      });
+      if (!existing) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+      await prisma.$transaction([
+        prisma.inspectorCert.deleteMany({ where: { certificationId: id } }),
+        prisma.jobTypeCertRequirement.deleteMany({ where: { certificationId: id } }),
+        prisma.jobCertRequirement.deleteMany({ where: { certificationId: id } }),
+        prisma.certification.delete({ where: { id } }),
+      ]);
+      await recordAudit({
+        userId: req.user!.id,
+        action: 'Certification.Delete',
+        entityType: 'Certification',
+        entityId: id,
+        payload: {
+          code: existing.code,
+          name: existing.name,
+          removedInspectorCerts: existing._count.inspectorCerts,
+          removedJobTypeReqs: existing._count.jobTypeRequirements,
+          removedJobReqs: existing._count.jobRequirements,
+        },
+      });
+      res.json({ ok: true });
     });
   }
 

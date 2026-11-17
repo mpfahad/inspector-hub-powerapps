@@ -212,6 +212,8 @@ export const updateClientSchema = z.object({
   email: z.string().trim().email().max(320).optional().nullable().or(z.literal('')),
 });
 
+const optionalHours = z.coerce.number().finite().nonnegative().max(24).optional().nullable();
+
 export const createJobTypeSchema = z.object({
   departmentId: z.coerce.number().int().positive(),
   code: z.string().trim().min(1).max(40),
@@ -219,6 +221,9 @@ export const createJobTypeSchema = z.object({
   description: z.string().trim().max(2000).optional().nullable(),
   certificationIds: z.array(z.coerce.number().int().positive()).optional(),
   defaultPriceUsd: optionalUsd,
+  dayRateUsd: optionalUsd,
+  hourRateUsd: optionalUsd,
+  defaultHours: optionalHours,
 });
 
 export const updateJobTypeSchema = z.object({
@@ -229,6 +234,9 @@ export const updateJobTypeSchema = z.object({
   active: z.coerce.boolean().optional(),
   certificationIds: z.array(z.coerce.number().int().positive()).optional(),
   defaultPriceUsd: optionalUsd,
+  dayRateUsd: optionalUsd,
+  hourRateUsd: optionalUsd,
+  defaultHours: optionalHours,
 });
 
 export const createCertificationSchema = z.object({

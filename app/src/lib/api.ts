@@ -304,6 +304,8 @@ export const api = {
       validityMonths?: number | null;
     }
   ) => request<Certification>(`/api/certifications/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCertification: (id: number) =>
+    request<{ ok: boolean }>(`/api/certifications/${id}`, { method: 'DELETE' }),
   inspectors: () => request<Inspector[]>('/api/inspectors'),
   createInspector: (data: {
     employeeNo: string;
@@ -518,6 +520,9 @@ export type JobType = {
   departmentId?: number;
   department?: Department;
   defaultPriceUsd?: number | null;
+  dayRateUsd?: number | null;
+  hourRateUsd?: number | null;
+  defaultHours?: number | null;
   certRequirements: { certification: Certification; mandatory: boolean }[];
   _count?: { jobs: number };
 };
@@ -529,6 +534,9 @@ export type JobTypePayload = {
   description?: string;
   certificationIds?: number[];
   defaultPriceUsd?: number | null;
+  dayRateUsd?: number | null;
+  hourRateUsd?: number | null;
+  defaultHours?: number | null;
 };
 
 export type Job = {

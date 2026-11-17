@@ -172,8 +172,14 @@ model JobType {
   name        String
   description String?
   active      Boolean  @default(true)
-  /// Default commercial price (USD) copied onto a job at assign unless overridden.
+  /// @deprecated Prefer dayRateUsd — kept in sync for older rows/APIs.
   defaultPriceUsd Float?
+  /// Commercial day rate (QAR) for day-basis jobs.
+  dayRateUsd Float?
+  /// Commercial hourly rate (QAR) for hourly jobs.
+  hourRateUsd Float?
+  /// Default hours per day (links day ↔ hour rate: day ≈ hour × hours).
+  defaultHours Float?
   certRequirements JobTypeCertRequirement[]
   jobs        Job[]
   priceChart  PriceChart?

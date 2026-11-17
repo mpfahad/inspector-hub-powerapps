@@ -194,9 +194,12 @@ export function JobNewPage() {
       title: f.title || type.name,
       certificationIds: type.certRequirements.map((r) => r.certification.id),
     }));
-    if (type.defaultPriceUsd != null) {
-      const rate = String(type.defaultPriceUsd);
-      setTeamSlots((slots) => slots.map((s) => ({ ...s, dayRate: rate })));
+    const rate =
+      rateBasis === 'hourly'
+        ? type.hourRateUsd
+        : type.dayRateUsd ?? type.defaultPriceUsd;
+    if (rate != null) {
+      setTeamSlots((slots) => slots.map((s) => ({ ...s, dayRate: String(rate) })));
     }
   };
 
@@ -346,7 +349,16 @@ export function JobNewPage() {
             </div>
             <SegToggle<RateBasis>
               value={rateBasis}
-              onChange={(v) => setRateBasis(v)}
+              onChange={(v) => {
+                setRateBasis(v);
+                const type = jobTypes.find((t) => String(t.id) === form.jobTypeId);
+                if (!type) return;
+                const rate =
+                  v === 'hourly' ? type.hourRateUsd : type.dayRateUsd ?? type.defaultPriceUsd;
+                if (rate != null) {
+                  setTeamSlots((slots) => slots.map((s) => ({ ...s, dayRate: String(rate) })));
+                }
+              }}
               options={[
                 { value: 'day', label: 'Day rate' },
                 { value: 'hourly', label: 'Hourly' },
@@ -549,7 +561,11 @@ export function JobNewPage() {
               onChange={setTeamSlots}
               rateBasis={rateBasis}
               hoursPerSlot={hoursPerSlot}
-              jobTypeRate={selectedType?.defaultPriceUsd ?? null}
+              jobTypeRate={
+                rateBasis === 'hourly'
+                  ? selectedType?.hourRateUsd ?? null
+                  : selectedType?.dayRateUsd ?? selectedType?.defaultPriceUsd ?? null
+              }
             />
           )}
         </div>

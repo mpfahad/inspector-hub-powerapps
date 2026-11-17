@@ -21,10 +21,12 @@ import {
   assertCanCompleteJob,
   getInspectorForUser,
   inspectorJobListWhere,
+  isAdmin,
   isStaff,
   staffDepartmentWhere,
   STAFF_ROLES,
 } from '../services/authz.js';
+import type { UserRole } from '@prisma/client';
 import { sendRouteError } from '../lib/httpErrors.js';
 import { buildJobProgress } from '../services/jobProgress.js';
 import { validateBody } from '../lib/validate.js';
@@ -66,6 +68,14 @@ const listInclude = {
   assignments: { include: { inspector: inspectorOnAssignment } },
 };
 
+/** Employee CTC never leaves the API except for Admin (billable/job rate stays). */
+function redactEmployeeCost<T>(payload: T, role: UserRole): T {
+  if (isAdmin(role)) return payload;
+  return JSON.parse(
+    JSON.stringify(payload, (key, value) => (key === 'dailyCostUsd' || key === 'costHistory' ? undefined : value))
+  ) as T;
+}
+
 function withCertSummary<T extends Parameters<typeof certSummaryForJob>[0]>(job: T) {
   return { ...job, certSummary: certSummaryForJob(job) };
 }
@@ -101,7 +111,7 @@ router.get('/', async (req, res) => {
     include: listInclude,
     orderBy: { updatedAt: 'desc' },
   });
-  res.json(jobs.map((j) => withCertSummary(j)));
+  res.json(redactEmployeeCost(jobs.map((j) => withCertSummary(j)), req.user!.role));
 });
 
 /** Possible duplicates: same client + dept + (jobType or title) with overlapping dates. */
@@ -213,7 +223,9 @@ router.get('/pipeline', requireRole(...STAFF_ROLES), async (req, res) => {
     completed: columns.completed.length,
   };
 
-  res.json({ columns, counts, all: enriched });
+  res.json(
+    redactEmployeeCost({ columns, counts, all: enriched }, req.user!.role)
+  );
 });
 
 router.get('/:id', async (req, res) => {
@@ -233,7 +245,12 @@ router.get('/:id', async (req, res) => {
   }
   const progress = await buildJobProgress(job);
   const suggestedPriceUsd = job.agreedPriceUsd ?? (await resolveDefaultPriceUsd(job));
-  res.json({ ...withCertSummary(job), progress, suggestedPriceUsd });
+  res.json(
+    redactEmployeeCost(
+      { ...withCertSummary(job), progress, suggestedPriceUsd },
+      req.user!.role
+    )
+  );
 });
 
 router.post('/', requireRole(...STAFF_ROLES), validateBody(createJobSchema), async (req, res) => {
@@ -352,7 +369,7 @@ router.post('/', requireRole(...STAFF_ROLES), validateBody(createJobSchema), asy
   }
 
   const created = await prisma.job.findUnique({ where: { id: job.id }, include: jobInclude });
-  res.status(201).json(withCertSummary(created ?? job));
+  res.status(201).json(redactEmployeeCost(withCertSummary(created ?? job), req.user!.role));
 });
 
 router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobSchema), async (req, res) => {
@@ -461,7 +478,7 @@ router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobSchema), a
     },
   });
   const fresh = await prisma.job.findUnique({ where: { id: jobId }, include: jobInclude });
-  res.json(withCertSummary(fresh ?? job));
+  res.json(redactEmployeeCost(withCertSummary(fresh ?? job), req.user!.role));
 });
 
 router.put('/:id/price', requireRole(...STAFF_ROLES), validateBody(updateJobPriceSchema), async (req, res) => {
@@ -488,7 +505,7 @@ router.put('/:id/price', requireRole(...STAFF_ROLES), validateBody(updateJobPric
     entityId: jobId,
     payload: { agreedPriceUsd },
   });
-  res.json(withCertSummary(updated));
+  res.json(redactEmployeeCost(withCertSummary(updated), req.user!.role));
 });
 
 /** Release Draft → Proposed without ranking engine (kept for older Draft rows). */
@@ -497,7 +514,9 @@ router.post('/:id/submit', requireRole(...STAFF_ROLES), async (req, res) => {
   try {
     await releaseJobForAssignment(jobId, req.user?.email);
     const job = await prisma.job.findUnique({ where: { id: jobId }, include: jobInclude });
-    res.json({ job: job ? withCertSummary(job) : job });
+    res.json(
+      redactEmployeeCost({ job: job ? withCertSummary(job) : job }, req.user!.role)
+    );
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Submit failed' });
   }
@@ -528,7 +547,7 @@ router.post('/:id/cancel', requireRole(...STAFF_ROLES), validateBody(cancelJobSc
       res.status(404).json({ error: 'Not found' });
       return;
     }
-    res.json(withCertSummary(job));
+    res.json(redactEmployeeCost(withCertSummary(job), req.user!.role));
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Cancel failed' });
   }
@@ -622,7 +641,14 @@ router.post(
     try {
       await assertCanCompleteJob(Number(req.params.id), inspectorId, req.user!);
       const staffPrice = isStaff(req.user!.role) ? agreedPriceUsd : undefined;
-      const staffMembers = isStaff(req.user!.role) ? members : undefined;
+      const allowCost = req.user!.role === 'Admin';
+      const staffMembers = isStaff(req.user!.role)
+        ? members?.map((m) => ({
+            ...m,
+            // Employee CTC only Admin — everyone else may update billable/job rate only
+            dailyCostUsd: allowCost ? m.dailyCostUsd : undefined,
+          }))
+        : undefined;
       const job = await completeJob(Number(req.params.id), inspectorId, comments ?? '', req.user?.email, {
         agreedPriceUsd: staffPrice,
         members: staffMembers,
@@ -634,7 +660,7 @@ router.post(
         entityId: Number(req.params.id),
         payload: { inspectorId, comments: comments ?? '', agreedPriceUsd: staffPrice, members: staffMembers },
       });
-      res.json(job);
+      res.json(redactEmployeeCost(job, req.user!.role));
     } catch (err) {
       sendRouteError(res, err, 'Complete failed');
     }

@@ -547,12 +547,8 @@ export function InspectorsPage() {
                     <th className="p-3">Name</th>
                     <th className="p-3">Employee</th>
                     <th className="p-3">Job title</th>
-                    {isAdminUser && (
-                      <>
-                        <th className="p-3">CTC / day</th>
-                        <th className="p-3">Billable / day</th>
-                      </>
-                    )}
+                    {isAdminUser && <th className="p-3">CTC / day</th>}
+                    <th className="p-3">Day rate / day</th>
                     <th className="p-3">QE approved</th>
                     <th className="p-3">Qualifications</th>
                     <th className="p-3">Status</th>
@@ -581,12 +577,8 @@ export function InspectorsPage() {
                         </td>
                         <td className="p-3">{i.employeeNo}</td>
                         <td className="p-3 text-slate-600">{i.jobTitle || '—'}</td>
-                        {isAdminUser && (
-                          <>
-                            <td className="p-3">{formatMoney(i.dailyCostUsd)}</td>
-                            <td className="p-3">{formatMoney(i.dailyBillableUsd)}</td>
-                          </>
-                        )}
+                        {isAdminUser && <td className="p-3">{formatMoney(i.dailyCostUsd)}</td>}
+                        <td className="p-3">{formatMoney(i.dailyBillableUsd)}</td>
                         <td className="p-3">
                           {i.qeApproved ? (
                             <span className="badge bg-teal/10 text-teal">Yes</span>
@@ -656,7 +648,7 @@ export function InspectorsPage() {
 
       <p className="text-xs text-slate-400">
         Hover a qualification for full name and expiry. Green = valid, amber = expiring soon, red = expired.
-        {isAdminUser ? ' Daily CTC/billable are Admin-only.' : ''}
+        {isAdminUser ? ' Daily CTC is Admin-only; day rate is visible to staff.' : ''}
       </p>
     </div>
   );

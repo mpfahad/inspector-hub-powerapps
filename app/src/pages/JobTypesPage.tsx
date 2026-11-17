@@ -9,7 +9,9 @@ type JobTypeForm = {
   name: string;
   description: string;
   certificationIds: number[];
-  defaultPriceUsd: string;
+  dayRateUsd: string;
+  hourRateUsd: string;
+  defaultHours: string;
 };
 
 const emptyForm: JobTypeForm = {
@@ -17,8 +19,45 @@ const emptyForm: JobTypeForm = {
   name: '',
   description: '',
   certificationIds: [],
-  defaultPriceUsd: '',
+  dayRateUsd: '',
+  hourRateUsd: '',
+  defaultHours: '8',
 };
+
+type RateField = 'dayRateUsd' | 'hourRateUsd' | 'defaultHours';
+
+function parseOpt(s: string): number | null {
+  if (s.trim() === '') return null;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** Any two of day / hour / default hours → fill the third. */
+function applyLinkedRates(form: JobTypeForm, changed: RateField, raw: string): JobTypeForm {
+  const next = { ...form, [changed]: raw };
+  let day = parseOpt(next.dayRateUsd);
+  let hour = parseOpt(next.hourRateUsd);
+  let hours = parseOpt(next.defaultHours);
+
+  if (changed === 'dayRateUsd' || changed === 'defaultHours') {
+    if (day != null && hours != null && hours > 0) {
+      hour = Math.round((day / hours) * 100) / 100;
+      next.hourRateUsd = String(hour);
+    } else if (day != null && hour != null && hour > 0 && changed === 'dayRateUsd') {
+      hours = Math.round((day / hour) * 10) / 10;
+      next.defaultHours = String(hours);
+    }
+  } else if (changed === 'hourRateUsd') {
+    if (hour != null && hours != null && hours > 0) {
+      day = Math.round(hour * hours * 100) / 100;
+      next.dayRateUsd = String(day);
+    } else if (day != null && hour != null && hour > 0) {
+      hours = Math.round((day / hour) * 10) / 10;
+      next.defaultHours = String(hours);
+    }
+  }
+  return next;
+}
 
 function JobTypeEditor({
   form,
@@ -87,15 +126,46 @@ function JobTypeEditor({
           onChange={(e) => setForm({ ...form, description: e.target.value })}
         />
       </div>
-      <div>
-        <label className="text-xs text-slate-500">Default price ({CURRENCY_CODE})</label>
-        <input
-          className="input mt-1 max-w-[160px]"
-          type="number"
-          min="0"
-          value={form.defaultPriceUsd}
-          onChange={(e) => setForm({ ...form, defaultPriceUsd: e.target.value })}
-        />
+      <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3 space-y-2">
+        <p className="text-xs text-slate-500">
+          Rates ({CURRENCY_CODE}) — enter any two; the third calculates automatically.
+        </p>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-slate-500">Day rate</label>
+            <input
+              className="input mt-1"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.dayRateUsd}
+              onChange={(e) => setForm(applyLinkedRates(form, 'dayRateUsd', e.target.value))}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500">Hour rate</label>
+            <input
+              className="input mt-1"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.hourRateUsd}
+              onChange={(e) => setForm(applyLinkedRates(form, 'hourRateUsd', e.target.value))}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500">Default hours / day</label>
+            <input
+              className="input mt-1"
+              type="number"
+              min="0"
+              max="24"
+              step="0.1"
+              value={form.defaultHours}
+              onChange={(e) => setForm(applyLinkedRates(form, 'defaultHours', e.target.value))}
+            />
+          </div>
+        </div>
       </div>
       <div>
         <label className="text-xs text-slate-500">Required qualifications</label>
@@ -158,6 +228,7 @@ export function JobTypesPage() {
   const [qualName, setQualName] = useState('');
   const [qualError, setQualError] = useState('');
   const [savingQual, setSavingQual] = useState(false);
+  const [deletingQual, setDeletingQual] = useState(false);
   const [showAddQual, setShowAddQual] = useState(false);
   const [editingQualId, setEditingQualId] = useState<number | null>(null);
 
@@ -184,7 +255,14 @@ export function JobTypesPage() {
       name: type.name,
       description: type.description ?? '',
       certificationIds: type.certRequirements.map((r) => r.certification.id),
-      defaultPriceUsd: type.defaultPriceUsd != null ? String(type.defaultPriceUsd) : '',
+      dayRateUsd:
+        type.dayRateUsd != null
+          ? String(type.dayRateUsd)
+          : type.defaultPriceUsd != null
+            ? String(type.defaultPriceUsd)
+            : '',
+      hourRateUsd: type.hourRateUsd != null ? String(type.hourRateUsd) : '',
+      defaultHours: type.defaultHours != null ? String(type.defaultHours) : '8',
     });
     setShowCreate(false);
     requestAnimationFrame(() => {
@@ -204,7 +282,10 @@ export function JobTypesPage() {
     name: form.name.trim(),
     description: form.description.trim() || undefined,
     certificationIds: form.certificationIds,
-    defaultPriceUsd: form.defaultPriceUsd ? Number(form.defaultPriceUsd) : undefined,
+    dayRateUsd: form.dayRateUsd ? Number(form.dayRateUsd) : null,
+    hourRateUsd: form.hourRateUsd ? Number(form.hourRateUsd) : null,
+    defaultHours: form.defaultHours ? Number(form.defaultHours) : null,
+    defaultPriceUsd: form.dayRateUsd ? Number(form.dayRateUsd) : null,
   });
 
   const createType = async () => {
@@ -320,6 +401,38 @@ export function JobTypesPage() {
     }
   };
 
+  const deleteQualification = async () => {
+    if (editingQualId == null) return;
+    const code = qualCode.trim() || 'this qualification';
+    if (
+      !window.confirm(
+        `Delete ${code} from the catalog?\n\nThis also removes it from any job types and inspector competency records that use it.`
+      )
+    ) {
+      return;
+    }
+    setDeletingQual(true);
+    setQualError('');
+    try {
+      const id = editingQualId;
+      await api.deleteCertification(id);
+      setCerts((prev) => prev.filter((c) => c.id !== id));
+      setEditForm((f) => ({
+        ...f,
+        certificationIds: f.certificationIds.filter((x) => x !== id),
+      }));
+      setCreateForm((f) => ({
+        ...f,
+        certificationIds: f.certificationIds.filter((x) => x !== id),
+      }));
+      cancelQualForm();
+    } catch (err) {
+      setQualError(err instanceof Error ? err.message : 'Could not delete qualification');
+    } finally {
+      setDeletingQual(false);
+    }
+  };
+
   if (deptLoading || !department) {
     return <p className="text-sm text-slate-500">Loading department…</p>;
   }
@@ -426,14 +539,26 @@ export function JobTypesPage() {
                   </div>
                 </div>
                 {qualError && <p className="text-sm text-red-600">{qualError}</p>}
-                <button
-                  type="button"
-                  className="btn-primary text-sm"
-                  disabled={savingQual}
-                  onClick={saveQualification}
-                >
-                  {savingQual ? 'Saving…' : editingQualId ? 'Save changes' : 'Save qualification'}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn-primary text-sm"
+                    disabled={savingQual || deletingQual}
+                    onClick={saveQualification}
+                  >
+                    {savingQual ? 'Saving…' : editingQualId ? 'Save changes' : 'Save qualification'}
+                  </button>
+                  {editingQualId != null && (
+                    <button
+                      type="button"
+                      className="btn-secondary text-sm text-red-700 border-red-200"
+                      disabled={savingQual || deletingQual}
+                      onClick={deleteQualification}
+                    >
+                      {deletingQual ? 'Deleting…' : 'Delete'}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
             <div className="flex flex-wrap gap-1.5">
@@ -457,7 +582,9 @@ export function JobTypesPage() {
               {certs.length === 0 && <span className="text-xs text-slate-400">No qualifications yet.</span>}
             </div>
             {canManage && (
-              <p className="text-[11px] text-slate-400">Click a qualification badge to edit its code or name.</p>
+              <p className="text-[11px] text-slate-400">
+                Click a qualification badge to edit or delete it from the catalog.
+              </p>
             )}
           </div>
 
@@ -491,11 +618,13 @@ export function JobTypesPage() {
                         {type.code} — {type.name}
                       </div>
                       {type.description && <p className="text-sm text-slate-500 mt-1">{type.description}</p>}
-                      {type.defaultPriceUsd != null && (
-                        <p className="text-xs text-slate-500 mt-1">
-                          Default price {formatMoney(type.defaultPriceUsd)}
-                        </p>
-                      )}
+                      <div className="text-xs text-slate-500 mt-1 space-y-0.5">
+                        {(type.dayRateUsd ?? type.defaultPriceUsd) != null && (
+                          <p>Day rate {formatMoney(type.dayRateUsd ?? type.defaultPriceUsd)}</p>
+                        )}
+                        {type.hourRateUsd != null && <p>Hour rate {formatMoney(type.hourRateUsd)}</p>}
+                        {type.defaultHours != null && <p>Default {type.defaultHours}h / day</p>}
+                      </div>
                       <div className="flex flex-wrap gap-2 mt-3">
                         {type.certRequirements.length === 0 ? (
                           <span className="text-xs text-slate-400">No qualifications required</span>

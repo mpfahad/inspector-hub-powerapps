@@ -4,6 +4,8 @@ import { rankInspectorsForJob } from './assignmentEngine.js';
 import { recordAudit } from './audit.js';
 import { notifyRoles, notifyUser } from './notifications.js';
 import { resolveDefaultPriceUsd } from './pricing.js';
+import { rateForJobBasis } from './jobTypeRates.js';
+import { ensureAutoActivityLogs } from './autoActivityLogs.js';
 
 /** Promote leftover statuses after workflow simplifications (no accept step, no post-assign QE). */
 export async function promoteAssignedJobsToActive() {
@@ -268,13 +270,19 @@ export async function assignInspector(
       ? options.agreedPriceUsd
       : job.agreedPriceUsd ?? (await resolveDefaultPriceUsd(job));
 
-  /** Freeze inspector rates onto the assignment so later CTC edits do not rewrite past cost (CM-013). */
+  const jobType =
+    job.jobTypeId != null
+      ? await prisma.jobType.findUnique({ where: { id: job.jobTypeId } })
+      : null;
+  const typeRate = rateForJobBasis(job.rateBasis, jobType);
+
+  /** Freeze rates onto the assignment (billable = job type / override; CTC Admin-only elsewhere). */
   const costSnapshot = {
     dailyCostUsd: inspector.dailyCostUsd ?? null,
     dailyBillableUsd:
       options?.dayRateUsd !== undefined && options.dayRateUsd !== null
         ? options.dayRateUsd
-        : inspector.dailyBillableUsd ?? null,
+        : typeRate ?? inspector.dailyBillableUsd ?? null,
   };
 
   const existingForInspector = job.assignments.find(
@@ -324,6 +332,7 @@ export async function assignInspector(
         agreedPriceUsd: priceToStore,
       },
     });
+    await ensureAutoActivityLogs(jobId);
     return prisma.assignment.findUniqueOrThrow({
       where: { id: existingForInspector.id },
       include: { inspector: true },
@@ -398,6 +407,7 @@ export async function assignInspector(
     },
   });
 
+  await ensureAutoActivityLogs(jobId);
   return assignment;
 }
 

@@ -321,6 +321,9 @@ export function ActivityLogPanel({
           <h2 className="font-semibold text-navy">Activity logs</h2>
           <p className="text-sm text-slate-500 mt-1">
             {logs.length} entries · {totalHours.toFixed(1)} h total
+            {canLog
+              ? ' — auto-created from the job schedule; edit a row if hours change.'
+              : ''}
           </p>
         </div>
         {canLog && defaultInspectorId && !editingId && (

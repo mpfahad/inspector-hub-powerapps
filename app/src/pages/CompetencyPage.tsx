@@ -161,7 +161,6 @@ export function CompetencyPage() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 <th className="text-left text-xs uppercase text-slate-500 font-semibold py-3 px-4 sticky left-0 bg-slate-50 z-10 min-w-[180px]">Inspector</th>
-                <th className="text-left text-xs uppercase text-slate-500 font-semibold py-3 px-2">Dept</th>
                 {certifications.map((c) => (
                   <th key={c.id} className="text-center text-[10px] uppercase text-slate-500 font-semibold py-3 px-1 whitespace-nowrap">
                     {c.code}
@@ -173,7 +172,7 @@ export function CompetencyPage() {
             <tbody className="divide-y divide-slate-50">
               {inspectors.length === 0 ? (
                 <tr>
-                  <td colSpan={certifications.length + 3} className="py-8 text-center text-sm text-slate-500">
+                  <td colSpan={certifications.length + 2} className="py-8 text-center text-sm text-slate-500">
                     No inspectors in this department.
                   </td>
                 </tr>
@@ -186,7 +185,6 @@ export function CompetencyPage() {
                         <Link to={deptPath(`inspectors/${ins.id}`)} className="font-medium text-navy hover:text-teal text-sm">{ins.name}</Link>
                         <div className="text-[11px] text-slate-400 font-mono">{ins.employeeNo}</div>
                       </td>
-                      <td className="py-2.5 px-2 text-xs text-slate-500">{ins.department.replace(' Inspection', '')}</td>
                       {certifications.map((cert) => {
                         const heldCert = ins.certs.find((c) => c.certificationId === cert.id || c.code === cert.code);
                         const status = heldCert?.status ?? null;
@@ -265,7 +263,7 @@ export function CompetencyPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-navy truncate">{e.inspector} · <span className="text-slate-500 font-normal">{e.code}</span></div>
-                    <div className="text-xs text-slate-500">{e.department} · expires {e.expires}</div>
+                    <div className="text-xs text-slate-500">Expires {e.expires}</div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className={`text-sm font-bold ${e.days < 0 ? 'text-red-600' : 'text-amber-700'}`}>

@@ -10,6 +10,7 @@ import {
   staffDepartmentWhere,
 } from '../services/authz.js';
 import { sendRouteError } from '../lib/httpErrors.js';
+import { syncJobTypeRates } from '../services/jobTypeRates.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -77,6 +78,9 @@ router.post('/', requireRole(...STAFF_ROLES), validateBody(createJobTypeSchema),
     description?: string | null;
     certificationIds?: number[];
     defaultPriceUsd?: number | null;
+    dayRateUsd?: number | null;
+    hourRateUsd?: number | null;
+    defaultHours?: number | null;
   };
 
   const dept = await prisma.department.findUnique({ where: { id: body.departmentId } });
@@ -91,13 +95,17 @@ router.post('/', requireRole(...STAFF_ROLES), validateBody(createJobTypeSchema),
     return;
   }
 
+  const rates = syncJobTypeRates(body);
   const type = await prisma.jobType.create({
     data: {
       departmentId: body.departmentId,
       code: body.code,
       name: body.name,
       description: body.description ?? null,
-      defaultPriceUsd: body.defaultPriceUsd ?? null,
+      defaultPriceUsd: rates.defaultPriceUsd,
+      dayRateUsd: rates.dayRateUsd,
+      hourRateUsd: rates.hourRateUsd,
+      defaultHours: rates.defaultHours,
       certRequirements: body.certificationIds?.length
         ? {
             create: body.certificationIds.map((certificationId) => ({
@@ -122,6 +130,9 @@ router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobTypeSchema
     active?: boolean;
     certificationIds?: number[];
     defaultPriceUsd?: number | null;
+    dayRateUsd?: number | null;
+    hourRateUsd?: number | null;
+    defaultHours?: number | null;
   };
   const existing = await prisma.jobType.findUnique({ where: { id } });
   if (!existing) {
@@ -151,6 +162,21 @@ router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobTypeSchema
     }
   }
 
+  const rateTouched =
+    body.dayRateUsd !== undefined ||
+    body.hourRateUsd !== undefined ||
+    body.defaultHours !== undefined ||
+    body.defaultPriceUsd !== undefined;
+  const rates = rateTouched
+    ? syncJobTypeRates({
+        dayRateUsd: body.dayRateUsd !== undefined ? body.dayRateUsd : existing.dayRateUsd,
+        hourRateUsd: body.hourRateUsd !== undefined ? body.hourRateUsd : existing.hourRateUsd,
+        defaultHours: body.defaultHours !== undefined ? body.defaultHours : existing.defaultHours,
+        defaultPriceUsd:
+          body.defaultPriceUsd !== undefined ? body.defaultPriceUsd : existing.defaultPriceUsd,
+      })
+    : null;
+
   const type = await prisma.jobType.update({
     where: { id },
     data: {
@@ -159,7 +185,14 @@ router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobTypeSchema
       name: body.name,
       description: body.description,
       active: body.active,
-      defaultPriceUsd: body.defaultPriceUsd !== undefined ? body.defaultPriceUsd : undefined,
+      ...(rates
+        ? {
+            defaultPriceUsd: rates.defaultPriceUsd,
+            dayRateUsd: rates.dayRateUsd,
+            hourRateUsd: rates.hourRateUsd,
+            defaultHours: rates.defaultHours,
+          }
+        : {}),
     },
     include,
   });

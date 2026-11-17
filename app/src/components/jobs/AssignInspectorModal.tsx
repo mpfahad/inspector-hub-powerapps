@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, type Inspector, type Job } from '../../lib/api';
 import { openAssignments, requiredTeamSize } from '../../lib/jobs';
+import { rateForJobBasis } from '../../lib/jobTypeRates';
 import {
   emptyTeamSlots,
   filledTeamSlots,
@@ -23,14 +24,22 @@ function ymd(iso?: string | null, fallback = '') {
 function slotsFromJob(job: Job): TeamSlot[] {
   const need = requiredTeamSize(job);
   const open = openAssignments(job);
-  const defaults = { startDate: ymd(job.startDate), endDate: ymd(job.endDate) };
+  const typeRate = rateForJobBasis(job.rateBasis, job.jobType);
+  const defaults = {
+    startDate: ymd(job.startDate),
+    endDate: ymd(job.endDate),
+    dayRate: typeRate != null ? String(typeRate) : '',
+  };
   const filled: TeamSlot[] = open.map((a) => ({
     key: `asg-${a.id}`,
     assignmentId: a.id,
     inspectorId: String(a.inspector.id),
     startDate: ymd(a.mobDate, defaults.startDate),
     endDate: ymd(a.demobDate, defaults.endDate),
-    dayRate: a.dailyBillableUsd != null ? String(a.dailyBillableUsd) : '',
+    dayRate:
+      a.dailyBillableUsd != null
+        ? String(a.dailyBillableUsd)
+        : defaults.dayRate,
   }));
   const pad = Math.max(need, filled.length) - filled.length;
   return [...filled, ...emptyTeamSlots(pad, defaults).map((s, i) => ({ ...s, key: `empty-${i}-${Date.now()}` }))];
@@ -166,11 +175,7 @@ export function AssignInspectorModal({ job, open, onClose, onAssigned }: Props) 
                   0,
                   Math.round((job.estimatedHours ?? 40) / Math.max(1, need))
                 )}
-                jobTypeRate={
-                  job.rateBasis === 'hourly'
-                    ? job.jobType?.hourRateUsd ?? null
-                    : job.jobType?.dayRateUsd ?? job.jobType?.defaultPriceUsd ?? null
-                }
+                jobTypeRate={rateForJobBasis(job.rateBasis, job.jobType)}
               />
               <button type="button" className="btn-secondary text-sm" disabled={busy} onClick={addSlot}>
                 Add another row

@@ -10,6 +10,7 @@ import {
 } from '../lib/api';
 import { useDepartment } from '../context/DepartmentContext';
 import { statusLabel } from '../lib/jobs';
+import { defaultHoursForJob, rateForJobBasis } from '../lib/jobTypeRates';
 import {
   emptyTeamSlots,
   filledTeamSlots,
@@ -18,9 +19,18 @@ import {
   type TeamSlot,
 } from '../components/jobs/TeamSlotsEditor';
 
+type AssignMode = 'later' | 'now';
+type AssignmentShape = 'single' | 'team';
+type RateBasis = 'day' | 'hourly';
+type CompletionMode = 'auto' | 'manual';
+
 function hoursPerDay(type?: JobType | null): number {
-  const h = type?.defaultHours;
-  return h != null && Number.isFinite(h) && h > 0 ? h : 8;
+  return defaultHoursForJob(type, 8);
+}
+
+function rateString(rateBasis: RateBasis, type?: JobType | null): string {
+  const rate = rateForJobBasis(rateBasis, type);
+  return rate != null ? String(rate) : '';
 }
 
 /** Job-type default hours × inclusive calendar days × inspectors needed. */
@@ -34,11 +44,6 @@ function suggestEstimatedHours(
   const total = hoursPerDay(type) * Math.max(1, days || 1) * Math.max(1, teamSize);
   return String(Math.round(total * 100) / 100);
 }
-
-type AssignMode = 'later' | 'now';
-type AssignmentShape = 'single' | 'team';
-type RateBasis = 'day' | 'hourly';
-type CompletionMode = 'auto' | 'manual';
 
 function SegToggle<T extends string>({
   value,
@@ -142,16 +147,20 @@ export function JobNewPage() {
 
   useEffect(() => {
     if (assignMode !== 'now') return;
+    const type = jobTypes.find((t) => String(t.id) === form.jobTypeId);
+    const typeRate = rateString(rateBasis, type);
     setTeamSlots((prev) => {
       const defaults = {
         startDate: form.startDate,
         endDate: form.endDate,
+        dayRate: typeRate,
       };
       if (prev.length === teamSize) {
         return prev.map((s) => ({
           ...s,
           startDate: s.startDate || defaults.startDate,
           endDate: s.endDate || defaults.endDate,
+          dayRate: s.dayRate || typeRate,
         }));
       }
       if (prev.length < teamSize) {
@@ -165,7 +174,7 @@ export function JobNewPage() {
       }
       return prev.slice(0, teamSize);
     });
-  }, [assignMode, teamSize, form.startDate, form.endDate]);
+  }, [assignMode, teamSize, form.startDate, form.endDate, form.jobTypeId, jobTypes, rateBasis]);
 
   // Prefill Est. hours from job type defaultHours × days × team size (still editable).
   useEffect(() => {
@@ -220,12 +229,9 @@ export function JobNewPage() {
       title: f.title || type.name,
       certificationIds: type.certRequirements.map((r) => r.certification.id),
     }));
-    const rate =
-      rateBasis === 'hourly'
-        ? type.hourRateUsd
-        : type.dayRateUsd ?? type.defaultPriceUsd;
-    if (rate != null) {
-      setTeamSlots((slots) => slots.map((s) => ({ ...s, dayRate: String(rate) })));
+    const rate = rateString(rateBasis, type);
+    if (rate) {
+      setTeamSlots((slots) => slots.map((s) => ({ ...s, dayRate: rate })));
     }
   };
 
@@ -378,11 +384,9 @@ export function JobNewPage() {
               onChange={(v) => {
                 setRateBasis(v);
                 const type = jobTypes.find((t) => String(t.id) === form.jobTypeId);
-                if (!type) return;
-                const rate =
-                  v === 'hourly' ? type.hourRateUsd : type.dayRateUsd ?? type.defaultPriceUsd;
-                if (rate != null) {
-                  setTeamSlots((slots) => slots.map((s) => ({ ...s, dayRate: String(rate) })));
+                const rate = rateString(v, type);
+                if (rate) {
+                  setTeamSlots((slots) => slots.map((s) => ({ ...s, dayRate: rate })));
                 }
               }}
               options={[
@@ -596,11 +600,7 @@ export function JobNewPage() {
               onChange={setTeamSlots}
               rateBasis={rateBasis}
               hoursPerSlot={hoursPerSlot}
-              jobTypeRate={
-                rateBasis === 'hourly'
-                  ? selectedType?.hourRateUsd ?? null
-                  : selectedType?.dayRateUsd ?? selectedType?.defaultPriceUsd ?? null
-              }
+              jobTypeRate={rateForJobBasis(rateBasis, selectedType)}
             />
           )}
         </div>

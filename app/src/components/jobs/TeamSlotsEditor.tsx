@@ -38,15 +38,16 @@ export function slotRowTotal(slot: TeamSlot, rateBasis: 'day' | 'hourly' = 'day'
 
 export function emptyTeamSlots(
   count: number,
-  defaults: { startDate: string; endDate: string }
+  defaults: { startDate: string; endDate: string; dayRate?: string }
 ): TeamSlot[] {
   const n = Math.min(20, Math.max(0, count));
+  const dayRate = defaults.dayRate ?? '';
   return Array.from({ length: n }, (_, i) => ({
     key: `slot-${i}-${Math.random().toString(36).slice(2, 8)}`,
     inspectorId: '',
     startDate: defaults.startDate,
     endDate: defaults.endDate,
-    dayRate: '',
+    dayRate,
   }));
 }
 

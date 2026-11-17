@@ -64,6 +64,7 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 | CM-035 | 2026-11-17 | Dept dashboard (not cross-dept home KPIs); planner half-day = blue bar half-width only; Coordinators edit job types; remove price-chart sidebar/global default; activity logs refresh Schedule hours; rate prefills from job type; edit qualifications + competency matrix cells. | Stakeholder | Implemented | 2026-11-17: home = dept picker; `/d/:code` dashboard; price via job type only; qual PUT; competency cell modal; `onChanged` → job progress. |
 | CM-036 | 2026-11-17 | Job type **day rate / hour rate / default hours** (any two → third); day jobs use day rate, hourly use hour rate+hours; **auto activity logs** on assign/Active (edit still allowed); employee **CTC only Admin**; no cost on job complete; qual delete; drop competency Dept column. | Stakeholder | Implemented | 2026-11-17: `JobType.dayRateUsd/hourRateUsd/defaultHours`; `ensureAutoActivityLogs`; cost redaction; catalog DELETE. |
 | CM-037 | 2026-11-17 | New job **Est. hours** prefilled from job type **default hours × calendar days × inspectors** (was hardcoded 40). Still editable. | Stakeholder | Implemented | 2026-11-17: `JobNewPage` uses `defaultHours` + `inclusiveDays`; hint under field. |
+| CM-038 | 2026-11-17 | **Hourly rate** on assign/new-job slots prefilled from job type (derive hour = day ÷ default hours when hour rate missing). | Stakeholder | Implemented | 2026-11-17: client `jobTypeRates.rateForJobBasis`; TeamSlots / Assign modal / New job. |
 
 ---
 
@@ -76,4 +77,4 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 
 ---
 
-*Last updated: 2026-11-17 (CM-037 est hours from job type)*
+*Last updated: 2026-11-17 (CM-038 hourly rate prefill)*

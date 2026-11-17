@@ -387,6 +387,8 @@ export function JobDetailPage() {
           defaultInspectorId={logInspectorId}
           defaultFrom={job.startDate.slice(0, 10)}
           defaultTo={job.endDate.slice(0, 10)}
+          defaultDailyHours={job.rateBasis === 'hourly' ? 8 : 8}
+          onChanged={load}
         />
       )}
 

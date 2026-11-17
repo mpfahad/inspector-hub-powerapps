@@ -8,7 +8,8 @@ export const BAND_STYLES: Record<
   { dot: string; cell: string; label: string }
 > = {
   available: { dot: 'bg-teal', cell: 'bg-teal/5', label: 'Available' },
-  partial: { dot: 'bg-amber-400', cell: 'bg-amber-50', label: 'Half day (<6h)' },
+  /** <6h booked: no cell tint — half-width job bar shows remaining capacity. */
+  partial: { dot: 'bg-teal', cell: 'bg-teal/5', label: 'Available' },
   heavy: { dot: 'bg-orange-500', cell: 'bg-orange-50', label: 'Heavy utilization' },
   full: { dot: 'bg-red-500', cell: 'bg-red-50', label: 'Fully allocated' },
   off: { dot: 'bg-slate-400', cell: 'bg-slate-100', label: 'Leave / Training' },

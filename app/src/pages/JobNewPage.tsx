@@ -194,6 +194,10 @@ export function JobNewPage() {
       title: f.title || type.name,
       certificationIds: type.certRequirements.map((r) => r.certification.id),
     }));
+    if (type.defaultPriceUsd != null) {
+      const rate = String(type.defaultPriceUsd);
+      setTeamSlots((slots) => slots.map((s) => ({ ...s, dayRate: rate })));
+    }
   };
 
   const onJobTypeChange = (jobTypeId: string) => {
@@ -545,6 +549,7 @@ export function JobNewPage() {
               onChange={setTeamSlots}
               rateBasis={rateBasis}
               hoursPerSlot={hoursPerSlot}
+              jobTypeRate={selectedType?.defaultPriceUsd ?? null}
             />
           )}
         </div>

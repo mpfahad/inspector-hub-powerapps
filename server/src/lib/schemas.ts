@@ -238,6 +238,13 @@ export const createCertificationSchema = z.object({
   validityMonths: z.coerce.number().int().positive().max(1200).optional().nullable(),
 });
 
+export const updateCertificationSchema = z.object({
+  code: z.string().trim().min(1).max(40).optional(),
+  name: z.string().trim().min(1).max(200).optional(),
+  issuer: z.string().trim().max(200).optional().nullable().or(z.literal('')),
+  validityMonths: z.coerce.number().int().positive().max(1200).optional().nullable(),
+});
+
 export const createActivityLogSchema = z.object({
   jobId: z.coerce.number().int().positive(),
   inspectorId: z.coerce.number().int().positive(),

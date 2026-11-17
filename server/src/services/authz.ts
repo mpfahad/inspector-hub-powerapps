@@ -4,7 +4,7 @@ import type { AuthUser } from '../middleware/auth.js';
 
 export const STAFF_ROLES: UserRole[] = ['Coordinator', 'Manager', 'Admin'];
 
-/** Manager+Admin: leave approve, job types mutate, price chart write (CM-034). */
+/** Manager+Admin: leave approve (CM-034). Job types / price chart: all staff. */
 export const MANAGER_ROLES: UserRole[] = ['Manager', 'Admin'];
 
 export const ACTIVE_ASSIGNMENT_STATUSES = ['Accepted', 'Active'] as const;

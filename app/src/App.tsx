@@ -6,7 +6,7 @@ import { DeptLayout } from './components/layout/DeptLayout';
 import { StaffRoute } from './components/auth/StaffRoute';
 import { JobsLayout } from './components/jobs/JobsLayout';
 import { LoginPage } from './pages/LoginPage';
-import { DashboardPage } from './pages/DashboardPage';
+import { DashboardPage, DepartmentDashboardPage } from './pages/DashboardPage';
 import { JobsPage } from './pages/JobsPage';
 import { JobNewPage } from './pages/JobNewPage';
 import { JobDetailPage } from './pages/JobDetailPage';
@@ -105,7 +105,8 @@ export default function App() {
                 </StaffOnly>
               }
             >
-              <Route index element={<Navigate to="jobs" replace />} />
+              <Route index element={<DepartmentDashboardPage />} />
+              <Route path="dashboard" element={<DepartmentDashboardPage />} />
               <Route path="jobs" element={<DeptJobsRoutes />}>
                 <Route index element={<JobsPage />} />
                 <Route path="new" element={<JobNewPage />} />

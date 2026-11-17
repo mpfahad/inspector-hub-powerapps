@@ -17,6 +17,7 @@ import {
   updateClientSchema,
   createInspectorSchema,
   createCertificationSchema,
+  updateCertificationSchema,
   inspectorCostsSchema,
   inspectorQeApprovedSchema,
 } from '../lib/schemas.js';
@@ -147,6 +148,50 @@ function crudRouter(model: 'client' | 'inspector' | 'department' | 'certificatio
         payload: { code: created.code, name: created.name },
       });
       res.status(201).json(created);
+    });
+
+    router.put('/:id', requireRole(...staffRoles), validateBody(updateCertificationSchema), async (req, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) {
+        res.status(400).json({ error: 'Invalid id' });
+        return;
+      }
+      const existing = await prisma.certification.findUnique({ where: { id } });
+      if (!existing) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+      const body = req.body as {
+        code?: string;
+        name?: string;
+        issuer?: string | null;
+        validityMonths?: number | null;
+      };
+      const code = body.code !== undefined ? body.code.trim().toUpperCase() : existing.code;
+      if (code !== existing.code) {
+        const clash = await prisma.certification.findUnique({ where: { code } });
+        if (clash) {
+          res.status(409).json({ error: 'A qualification with this code already exists' });
+          return;
+        }
+      }
+      const updated = await prisma.certification.update({
+        where: { id },
+        data: {
+          code,
+          name: body.name !== undefined ? body.name.trim() : undefined,
+          issuer: body.issuer !== undefined ? body.issuer?.trim() || null : undefined,
+          validityMonths: body.validityMonths !== undefined ? body.validityMonths : undefined,
+        },
+      });
+      await recordAudit({
+        userId: req.user!.id,
+        action: 'Certification.Update',
+        entityType: 'Certification',
+        entityId: updated.id,
+        payload: { code: updated.code, name: updated.name },
+      });
+      res.json(updated);
     });
   }
 

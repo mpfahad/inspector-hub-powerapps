@@ -6,6 +6,7 @@ import { rememberDeptCode } from '../../context/DepartmentContext';
 import { NotificationBell } from './NotificationBell';
 
 const deptChildLinks = [
+  { suffix: '', label: 'Dashboard' },
   { suffix: 'jobs', label: 'Jobs' },
   { suffix: 'inspectors', label: 'Inspectors' },
   { suffix: 'job-types', label: 'Job types' },
@@ -142,21 +143,27 @@ export function AppShell() {
                     {activeDepartment.name}
                   </div>
                   <div className="ml-1 flex flex-col gap-0.5 border-l border-slate-200 pl-2">
-                    {deptChildLinks.map((child) => (
-                      <NavLink
-                        key={child.suffix}
-                        to={`/d/${activeDepartment.code}/${child.suffix}`}
-                        className={({ isActive }) =>
-                          `rounded-md px-2.5 py-1.5 text-xs ${
-                            isActive
-                              ? 'bg-teal/10 text-navy font-medium'
-                              : 'text-slate-500 hover:bg-slate-50 hover:text-navy'
-                          }`
-                        }
-                      >
-                        {child.label}
-                      </NavLink>
-                    ))}
+                    {deptChildLinks.map((child) => {
+                      const to = child.suffix
+                        ? `/d/${activeDepartment.code}/${child.suffix}`
+                        : `/d/${activeDepartment.code}`;
+                      return (
+                        <NavLink
+                          key={child.label}
+                          to={to}
+                          end={!child.suffix}
+                          className={({ isActive }) =>
+                            `rounded-md px-2.5 py-1.5 text-xs ${
+                              isActive
+                                ? 'bg-teal/10 text-navy font-medium'
+                                : 'text-slate-500 hover:bg-slate-50 hover:text-navy'
+                            }`
+                          }
+                        >
+                          {child.label}
+                        </NavLink>
+                      );
+                    })}
                   </div>
                   <button
                     type="button"

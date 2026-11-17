@@ -6,7 +6,7 @@ import { createJobTypeSchema, updateJobTypeSchema } from '../lib/schemas.js';
 import { recordAudit } from '../services/audit.js';
 import {
   assertCanAccessDepartment,
-  MANAGER_ROLES,
+  STAFF_ROLES,
   staffDepartmentWhere,
 } from '../services/authz.js';
 import { sendRouteError } from '../lib/httpErrors.js';
@@ -69,7 +69,7 @@ router.get('/:id', async (req, res) => {
   res.json(type);
 });
 
-router.post('/', requireRole(...MANAGER_ROLES), validateBody(createJobTypeSchema), async (req, res) => {
+router.post('/', requireRole(...STAFF_ROLES), validateBody(createJobTypeSchema), async (req, res) => {
   const body = req.body as {
     departmentId: number;
     code: string;
@@ -109,15 +109,10 @@ router.post('/', requireRole(...MANAGER_ROLES), validateBody(createJobTypeSchema
     },
     include,
   });
-  if (body.defaultPriceUsd != null) {
-    await prisma.priceChart.create({
-      data: { jobTypeId: type.id, priceUsd: body.defaultPriceUsd },
-    });
-  }
   res.status(201).json(type);
 });
 
-router.put('/:id', requireRole(...MANAGER_ROLES), validateBody(updateJobTypeSchema), async (req, res) => {
+router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobTypeSchema), async (req, res) => {
   const id = Number(req.params.id);
   const body = req.body as {
     departmentId?: number;
@@ -169,19 +164,10 @@ router.put('/:id', requireRole(...MANAGER_ROLES), validateBody(updateJobTypeSche
     include,
   });
 
-  if (body.defaultPriceUsd != null) {
-    const existing = await prisma.priceChart.findUnique({ where: { jobTypeId: id } });
-    if (existing) {
-      await prisma.priceChart.update({ where: { id: existing.id }, data: { priceUsd: body.defaultPriceUsd } });
-    } else {
-      await prisma.priceChart.create({ data: { jobTypeId: id, priceUsd: body.defaultPriceUsd } });
-    }
-  }
-
   res.json(type);
 });
 
-router.delete('/:id', requireRole(...MANAGER_ROLES), async (req, res) => {
+router.delete('/:id', requireRole(...STAFF_ROLES), async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) {
     res.status(400).json({ error: 'Invalid id' });

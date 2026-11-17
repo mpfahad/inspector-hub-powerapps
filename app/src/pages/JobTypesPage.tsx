@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, type Certification, type JobType, type PriceChartData } from '../lib/api';
+import { api, type Certification, type JobType } from '../lib/api';
 import { CURRENCY_CODE, formatMoney } from '../lib/money';
 import { useAuth } from '../context/AuthContext';
 import { useDepartment } from '../context/DepartmentContext';
@@ -137,14 +137,9 @@ function JobTypeEditor({
 export function JobTypesPage() {
   const { user } = useAuth();
   const { department, loading: deptLoading } = useDepartment();
-  const canManage = ['Manager', 'Admin'].includes(user?.role ?? '');
+  const canManage = ['Coordinator', 'Manager', 'Admin'].includes(user?.role ?? '');
   const [types, setTypes] = useState<JobType[]>([]);
   const [certs, setCerts] = useState<Certification[]>([]);
-  const [chart, setChart] = useState<PriceChartData | null>(null);
-  const [globalPrice, setGlobalPrice] = useState('');
-  const [typePrices, setTypePrices] = useState<Record<number, string>>({});
-  const [chartError, setChartError] = useState('');
-  const [savingChart, setSavingChart] = useState(false);
 
   const [createForm, setCreateForm] = useState<JobTypeForm>(emptyForm);
   const [createError, setCreateError] = useState('');
@@ -164,21 +159,16 @@ export function JobTypesPage() {
   const [qualError, setQualError] = useState('');
   const [savingQual, setSavingQual] = useState(false);
   const [showAddQual, setShowAddQual] = useState(false);
+  const [editingQualId, setEditingQualId] = useState<number | null>(null);
 
   const load = () => {
     if (!department) return Promise.resolve();
     return Promise.all([
       api.jobTypesAll({ departmentId: department.id }),
-      api.priceChart({ departmentId: department.id }),
       api.certifications(),
-    ]).then(([t, c, q]) => {
+    ]).then(([t, q]) => {
       setTypes(t);
-      setChart(c);
       setCerts(q);
-      setGlobalPrice(String(c.globalDefaultUsd ?? ''));
-      setTypePrices(
-        Object.fromEntries(c.items.map((i) => [i.jobTypeId, i.priceUsd != null ? String(i.priceUsd) : '']))
-      );
     });
   };
 
@@ -269,7 +259,24 @@ export function JobTypesPage() {
     }
   };
 
-  const addQualification = async () => {
+  const startEditQual = (c: Certification) => {
+    if (!canManage) return;
+    setEditingQualId(c.id);
+    setQualCode(c.code);
+    setQualName(c.name);
+    setShowAddQual(true);
+    setQualError('');
+  };
+
+  const cancelQualForm = () => {
+    setShowAddQual(false);
+    setEditingQualId(null);
+    setQualCode('');
+    setQualName('');
+    setQualError('');
+  };
+
+  const saveQualification = async () => {
     setQualError('');
     if (!qualCode.trim() || !qualName.trim()) {
       setQualError('Code and name are required.');
@@ -277,30 +284,37 @@ export function JobTypesPage() {
     }
     setSavingQual(true);
     try {
-      const created = await api.createCertification({
-        code: qualCode.trim(),
-        name: qualName.trim(),
-      });
-      setCerts((prev) => [...prev, created].sort((a, b) => a.code.localeCompare(b.code)));
-      setQualCode('');
-      setQualName('');
-      setShowAddQual(false);
-      // Auto-select on the open editor if editing/creating
-      if (editingId != null) {
-        setEditForm((f) =>
-          f.certificationIds.includes(created.id)
-            ? f
-            : { ...f, certificationIds: [...f.certificationIds, created.id] }
+      if (editingQualId != null) {
+        const updated = await api.updateCertification(editingQualId, {
+          code: qualCode.trim(),
+          name: qualName.trim(),
+        });
+        setCerts((prev) =>
+          prev.map((c) => (c.id === updated.id ? updated : c)).sort((a, b) => a.code.localeCompare(b.code))
         );
-      } else if (showCreate) {
-        setCreateForm((f) =>
-          f.certificationIds.includes(created.id)
-            ? f
-            : { ...f, certificationIds: [...f.certificationIds, created.id] }
-        );
+      } else {
+        const created = await api.createCertification({
+          code: qualCode.trim(),
+          name: qualName.trim(),
+        });
+        setCerts((prev) => [...prev, created].sort((a, b) => a.code.localeCompare(b.code)));
+        if (editingId != null) {
+          setEditForm((f) =>
+            f.certificationIds.includes(created.id)
+              ? f
+              : { ...f, certificationIds: [...f.certificationIds, created.id] }
+          );
+        } else if (showCreate) {
+          setCreateForm((f) =>
+            f.certificationIds.includes(created.id)
+              ? f
+              : { ...f, certificationIds: [...f.certificationIds, created.id] }
+          );
+        }
       }
+      cancelQualForm();
     } catch (err) {
-      setQualError(err instanceof Error ? err.message : 'Could not add qualification');
+      setQualError(err instanceof Error ? err.message : 'Could not save qualification');
     } finally {
       setSavingQual(false);
     }
@@ -316,7 +330,8 @@ export function JobTypesPage() {
         <div>
           <h1 className="text-2xl font-bold text-navy">Job types · {department.name}</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Categories and certifications for this department. Price chart on the right is scoped here.
+            Categories, certifications, and default commercial price for this department. Set price when
+            editing a job type.
           </p>
         </div>
         {canManage && (
@@ -334,8 +349,7 @@ export function JobTypesPage() {
         )}
       </div>
 
-      <div className="grid lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.9fr)] gap-6 items-start">
-        <div className="space-y-4 min-w-0">
+      <div className="space-y-4 max-w-4xl">
           {canManage && showCreate && (
             <div className="card p-5 space-y-3 border-teal/30">
               <h2 className="text-sm font-semibold text-navy">Add job type</h2>
@@ -367,19 +381,30 @@ export function JobTypesPage() {
                   {certs.length} available — toggle them on a job type while editing.
                 </p>
               </div>
-              <button
-                type="button"
-                className="btn-secondary text-xs shrink-0"
-                onClick={() => {
-                  setShowAddQual((v) => !v);
-                  setQualError('');
-                }}
-              >
-                {showAddQual ? 'Cancel' : '+ Add qualification'}
-              </button>
+              {canManage && (
+                <button
+                  type="button"
+                  className="btn-secondary text-xs shrink-0"
+                  onClick={() => {
+                    if (showAddQual) cancelQualForm();
+                    else {
+                      setEditingQualId(null);
+                      setQualCode('');
+                      setQualName('');
+                      setShowAddQual(true);
+                      setQualError('');
+                    }
+                  }}
+                >
+                  {showAddQual ? 'Cancel' : '+ Add qualification'}
+                </button>
+              )}
             </div>
-            {showAddQual && (
+            {canManage && showAddQual && (
               <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+                <p className="text-xs font-medium text-navy">
+                  {editingQualId ? 'Edit qualification' : 'New qualification'}
+                </p>
                 <div className="grid sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-slate-500">Code *</label>
@@ -401,19 +426,39 @@ export function JobTypesPage() {
                   </div>
                 </div>
                 {qualError && <p className="text-sm text-red-600">{qualError}</p>}
-                <button type="button" className="btn-primary text-sm" disabled={savingQual} onClick={addQualification}>
-                  {savingQual ? 'Saving…' : 'Save qualification'}
+                <button
+                  type="button"
+                  className="btn-primary text-sm"
+                  disabled={savingQual}
+                  onClick={saveQualification}
+                >
+                  {savingQual ? 'Saving…' : editingQualId ? 'Save changes' : 'Save qualification'}
                 </button>
               </div>
             )}
             <div className="flex flex-wrap gap-1.5">
-              {certs.map((c) => (
-                <span key={c.id} className="badge bg-slate-100 text-slate-600" title={c.name}>
-                  {c.code}
-                </span>
-              ))}
+              {certs.map((c) =>
+                canManage ? (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className="badge bg-slate-100 text-slate-600 hover:bg-teal/10 hover:text-navy"
+                    title={`${c.name} — click to edit`}
+                    onClick={() => startEditQual(c)}
+                  >
+                    {c.code}
+                  </button>
+                ) : (
+                  <span key={c.id} className="badge bg-slate-100 text-slate-600" title={c.name}>
+                    {c.code}
+                  </span>
+                )
+              )}
               {certs.length === 0 && <span className="text-xs text-slate-400">No qualifications yet.</span>}
             </div>
+            {canManage && (
+              <p className="text-[11px] text-slate-400">Click a qualification badge to edit its code or name.</p>
+            )}
           </div>
 
           {types.map((type) => {
@@ -495,91 +540,6 @@ export function JobTypesPage() {
           {types.length === 0 && (
             <p className="text-sm text-slate-500 card p-6">No job types yet. Add one to get started.</p>
           )}
-        </div>
-
-        <aside className="lg:sticky lg:top-6 space-y-4">
-          {chart && (
-            <form
-              className="card p-5 space-y-4"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (!canManage) return;
-                setChartError('');
-                setSavingChart(true);
-                try {
-                  await api.updatePriceChart({
-                    globalDefaultUsd: Number(globalPrice),
-                    items: chart.items.map((i) => ({
-                      jobTypeId: i.jobTypeId,
-                      priceUsd: Number(typePrices[i.jobTypeId] || 0),
-                    })),
-                  });
-                  await load();
-                } catch (err) {
-                  setChartError(err instanceof Error ? err.message : 'Could not save price chart');
-                } finally {
-                  setSavingChart(false);
-                }
-              }}
-            >
-              <div>
-                <h2 className="font-semibold text-navy">Price chart ({CURRENCY_CODE})</h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  Default commercial price copied onto a job when it is assigned. Inspector CTC/billable stay separate.
-                </p>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-500">Global default</label>
-                <input
-                  className="input mt-1"
-                  type="number"
-                  min="0"
-                  disabled={!canManage}
-                  value={globalPrice}
-                  onChange={(e) => setGlobalPrice(e.target.value)}
-                />
-              </div>
-              <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-left text-xs text-slate-500 border-b border-slate-100 sticky top-0 bg-white">
-                    <tr>
-                      <th className="py-2 pr-2">Job type</th>
-                      <th className="py-2">Price</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {chart.items.map((item) => (
-                      <tr key={item.jobTypeId} className="border-b border-slate-50">
-                        <td className="py-2 pr-2">
-                          <div className="font-medium text-navy text-xs">{item.code}</div>
-                          <div className="text-xs text-slate-500">{item.name}</div>
-                        </td>
-                        <td className="py-2">
-                          <input
-                            className="input max-w-[110px] text-sm"
-                            type="number"
-                            min="0"
-                            disabled={!canManage}
-                            value={typePrices[item.jobTypeId] ?? ''}
-                            onChange={(e) =>
-                              setTypePrices((p) => ({ ...p, [item.jobTypeId]: e.target.value }))
-                            }
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {chartError && <p className="text-sm text-red-600">{chartError}</p>}
-              {canManage && (
-                <button type="submit" className="btn-primary w-full" disabled={savingChart}>
-                  {savingChart ? 'Saving…' : 'Save price chart'}
-                </button>
-              )}
-            </form>
-          )}
-        </aside>
       </div>
     </div>
   );

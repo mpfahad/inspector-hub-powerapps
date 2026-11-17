@@ -9,6 +9,10 @@ type Props = {
   /** Optional defaults for multi-day range (YYYY-MM-DD). */
   defaultFrom?: string;
   defaultTo?: string;
+  /** Prefill daily hours (e.g. 8 for day-rate jobs). */
+  defaultDailyHours?: number;
+  /** Called after create/update/delete so parent can refresh job progress. */
+  onChanged?: () => void;
 };
 
 type Mode = 'single' | 'multi';
@@ -67,10 +71,13 @@ export function ActivityLogPanel({
   defaultInspectorId,
   defaultFrom,
   defaultTo,
+  defaultDailyHours = 8,
+  onChanged,
 }: Props) {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [mode, setMode] = useState<Mode>('single');
-  const [form, setForm] = useState(emptyForm);
+  const hoursSeed = String(defaultDailyHours > 0 ? defaultDailyHours : 8);
+  const [form, setForm] = useState({ ...emptyForm, hours: hoursSeed, productiveHours: productiveFromHours(hoursSeed) });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
@@ -78,7 +85,7 @@ export function ActivityLogPanel({
 
   const [rangeFrom, setRangeFrom] = useState(defaultFrom || emptyForm.logDate);
   const [rangeTo, setRangeTo] = useState(defaultTo || emptyForm.logDate);
-  const [defaultHours, setDefaultHours] = useState('8');
+  const [defaultHours, setDefaultHours] = useState(hoursSeed);
   const [defaultQuality, setDefaultQuality] = useState('90');
   const [sharedNarrative, setSharedNarrative] = useState('');
   const [rows, setRows] = useState<DayRow[]>([]);
@@ -94,6 +101,12 @@ export function ActivityLogPanel({
     if (defaultFrom) setRangeFrom(defaultFrom);
     if (defaultTo) setRangeTo(defaultTo);
   }, [defaultFrom, defaultTo]);
+
+  useEffect(() => {
+    const h = String(defaultDailyHours > 0 ? defaultDailyHours : 8);
+    setDefaultHours(h);
+    setForm((f) => ({ ...f, hours: h, productiveHours: productiveFromHours(h, f.qualityScore || '90') }));
+  }, [defaultDailyHours]);
 
   const loggedKeys = useMemo(() => {
     const set = new Set<string>();
@@ -187,8 +200,13 @@ export function ActivityLogPanel({
         narrative: form.narrative || undefined,
         qualityScore: form.qualityScore ? Number(form.qualityScore) : undefined,
       });
-      setForm(emptyForm);
+      setForm({
+        ...emptyForm,
+        hours: defaultHours,
+        productiveHours: productiveFromHours(defaultHours, defaultQuality),
+      });
       await load();
+      onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save log');
     } finally {
@@ -209,8 +227,13 @@ export function ActivityLogPanel({
         qualityScore: form.qualityScore ? Number(form.qualityScore) : undefined,
       });
       setEditingId(null);
-      setForm(emptyForm);
+      setForm({
+        ...emptyForm,
+        hours: defaultHours,
+        productiveHours: productiveFromHours(defaultHours, defaultQuality),
+      });
       await load();
+      onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update log');
     } finally {
@@ -248,6 +271,7 @@ export function ActivityLogPanel({
       );
       setSharedNarrative('');
       await load();
+      onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save logs');
     } finally {
@@ -259,6 +283,7 @@ export function ActivityLogPanel({
     if (!confirm('Delete this activity log?')) return;
     await api.deleteActivityLog(id);
     await load();
+    onChanged?.();
   };
 
   const startEdit = (log: ActivityLog) => {

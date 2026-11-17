@@ -62,6 +62,8 @@ type Props = {
   rateBasis?: 'day' | 'hourly';
   /** Used for hourly row totals (job estimated hours / team size when known). */
   hoursPerSlot?: number;
+  /** Commercial rate from job type default price — preferred over inspector billable. */
+  jobTypeRate?: number | null;
 };
 
 export function TeamSlotsEditor({
@@ -71,9 +73,16 @@ export function TeamSlotsEditor({
   disabled,
   rateBasis = 'day',
   hoursPerSlot = 0,
+  jobTypeRate = null,
 }: Props) {
   const update = (key: string, patch: Partial<TeamSlot>) => {
     onChange(slots.map((s) => (s.key === key ? { ...s, ...patch } : s)));
+  };
+
+  const resolveRate = (ins?: TeamSlotInspectorOption | null) => {
+    if (jobTypeRate != null && Number.isFinite(jobTypeRate)) return String(jobTypeRate);
+    if (ins?.dailyBillableUsd != null) return String(ins.dailyBillableUsd);
+    return '';
   };
 
   const usedIds = new Set(slots.map((s) => s.inspectorId).filter(Boolean));
@@ -101,10 +110,7 @@ export function TeamSlotsEditor({
                   const ins = inspectors.find((i) => String(i.id) === id);
                   update(slot.key, {
                     inspectorId: id,
-                    dayRate:
-                      ins?.dailyBillableUsd != null
-                        ? String(ins.dailyBillableUsd)
-                        : slot.dayRate,
+                    dayRate: id ? resolveRate(ins) || slot.dayRate : slot.dayRate,
                   });
                 }}
               >

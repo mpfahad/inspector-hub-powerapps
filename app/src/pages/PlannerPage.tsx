@@ -157,37 +157,44 @@ function TimelineGrid({ data, deptPath }: { data: PlannerData; deptPath: (suffix
                     className="relative grid min-h-[56px]"
                     style={{ gridTemplateColumns: `repeat(${data.days.length}, minmax(0, 1fr))` }}
                   >
-                    {row.dayBands.map(({ date, band, hours }) => {
-                      const half = isHalfDayBooked(hours);
-                      return (
-                        <div
-                          key={date}
-                          title={`${date}: ${hours}h — ${BAND_STYLES[band].label}`}
-                          className={`h-14 border-r border-slate-100 last:border-r-0 relative ${isWeekend(date) ? 'bg-slate-50/60' : ''} ${
-                            half ? '' : BAND_STYLES[band].cell
-                          }`}
-                        >
-                          {half && (
-                            <div
-                              className="absolute inset-y-0 left-0 w-1/2 bg-amber-200/70 border-r border-amber-300/80 pointer-events-none"
-                              aria-hidden
-                            />
-                          )}
-                          {hours > 0 && (
-                            <span className="absolute bottom-0.5 inset-x-0 text-center text-[9px] font-medium text-slate-600 tabular-nums pointer-events-none z-[2]">
-                              {hours}h
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {items.map((a) => {
+                    {row.dayBands.map(({ date, band, hours }) => (
+                      <div
+                        key={date}
+                        title={`${date}: ${hours}h — ${BAND_STYLES[band].label}`}
+                        className={`h-14 border-r border-slate-100 last:border-r-0 relative ${
+                          isWeekend(date) ? 'bg-slate-50/60' : ''
+                        } ${BAND_STYLES[band].cell}`}
+                      >
+                        {hours > 0 && (
+                          <span className="absolute bottom-0.5 inset-x-0 text-center text-[9px] font-medium text-slate-600 tabular-nums pointer-events-none z-[2]">
+                            {hours}h
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                    {items.flatMap((a) => {
                       const aStart = a.start < startIso ? startIso : a.start;
                       const aEnd = a.end > endIso ? endIso : a.end;
                       const offset = isoList.indexOf(aStart);
                       const span = isoList.indexOf(aEnd) - offset + 1;
-                      if (offset < 0 || span <= 0) return null;
-                      return (
+                      if (offset < 0 || span <= 0) return [];
+
+                      // Half-day jobs: one half-width segment per day (not 50% of the whole span).
+                      const halfJob = a.kind === 'job' && isHalfDayBooked(a.hoursPerDay);
+                      if (halfJob && span > 1) {
+                        return isoList.slice(offset, offset + span).map((day, i) => (
+                          <AllocationBar
+                            key={`${a.id}-${day}`}
+                            allocation={{ ...a, start: day, end: day }}
+                            offset={offset + i}
+                            span={1}
+                            total={data.days.length}
+                            deptPath={deptPath}
+                          />
+                        ));
+                      }
+
+                      return [
                         <AllocationBar
                           key={a.id}
                           allocation={a}
@@ -195,8 +202,8 @@ function TimelineGrid({ data, deptPath }: { data: PlannerData; deptPath: (suffix
                           span={span}
                           total={data.days.length}
                           deptPath={deptPath}
-                        />
-                      );
+                        />,
+                      ];
                     })}
                   </div>
                 </div>
@@ -302,8 +309,23 @@ export function PlannerPage() {
           {fmtRange(data.weekStart, dayCount)}
         </button>
         <button type="button" className="btn-secondary text-sm px-3" onClick={() => shift(1)}>→</button>
-        <div className="ml-auto flex flex-wrap items-center gap-3 text-[11px]">
-          {(Object.keys(BAND_STYLES) as (keyof typeof BAND_STYLES)[]).map((b) => (
+        <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-5 rounded-sm bg-gradient-to-r from-navy to-steel" />
+            <span className="text-slate-500">Job (half-width if &lt;6h/day)</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-5 rounded-sm bg-amber-100 border border-amber-300" />
+            <span className="text-slate-500">Leave</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-5 rounded-sm bg-steel/20 border border-steel/40" />
+            <span className="text-slate-500">Training</span>
+          </div>
+          <span className="text-slate-300 hidden sm:inline">|</span>
+          {(
+            ['available', 'heavy', 'full', 'off'] as (keyof typeof BAND_STYLES)[]
+          ).map((b) => (
             <div key={b} className="flex items-center gap-1.5">
               <span className={`h-2.5 w-2.5 rounded-full ${BAND_STYLES[b].dot}`} />
               <span className="text-slate-500">{BAND_STYLES[b].label}</span>

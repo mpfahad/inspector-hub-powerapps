@@ -62,10 +62,13 @@ router.get('/', requireRole(...STAFF_ROLES), async (req, res) => {
     name: ins.name,
     department: ins.department.name,
     certs: ins.inspectorCerts.map((c) => ({
+      id: c.id,
+      certificationId: c.certificationId,
       code: c.certification.code,
       name: c.certification.name,
       status: displayStatus(certStatusFromExpiry(c.expiresOn)),
       expiresOn: c.expiresOn.toISOString().slice(0, 10),
+      issuedOn: c.issuedOn.toISOString().slice(0, 10),
       daysToExpiry: daysToExpiry(c.expiresOn),
     })),
   }));

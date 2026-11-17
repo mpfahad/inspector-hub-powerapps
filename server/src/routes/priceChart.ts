@@ -1,21 +1,14 @@
 import { Router } from 'express';
-import { prisma } from '../lib/prisma.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
-import {
-  assertCanAccessDepartment,
-  MANAGER_ROLES,
-  STAFF_ROLES,
-} from '../services/authz.js';
-import { validateBody } from '../lib/validate.js';
-import { priceChartSchema } from '../lib/schemas.js';
+import { assertCanAccessDepartment, STAFF_ROLES } from '../services/authz.js';
 import { getPriceChart } from '../services/pricing.js';
-import { recordAudit } from '../services/audit.js';
 import { sendRouteError } from '../lib/httpErrors.js';
 
 const router = Router();
 router.use(authMiddleware);
 router.use(requireRole(...STAFF_ROLES));
 
+/** Read-only mirror of job-type default prices (UI edits prices on the job type). */
 router.get('/', async (req, res) => {
   const departmentId = req.query.departmentId ? Number(req.query.departmentId) : undefined;
   if (Number.isFinite(departmentId)) {
@@ -29,48 +22,10 @@ router.get('/', async (req, res) => {
   res.json(await getPriceChart(Number.isFinite(departmentId) ? departmentId : undefined));
 });
 
-router.put('/', requireRole(...MANAGER_ROLES), validateBody(priceChartSchema), async (req, res) => {
-  const body = req.body as {
-    globalDefaultUsd?: number;
-    items?: { jobTypeId: number; priceUsd: number }[];
-  };
-
-  if (body.globalDefaultUsd != null) {
-    const existing = await prisma.priceChart.findFirst({ where: { jobTypeId: null } });
-    if (existing) {
-      await prisma.priceChart.update({
-        where: { id: existing.id },
-        data: { priceUsd: body.globalDefaultUsd, updatedByEmail: req.user?.email },
-      });
-    } else {
-      await prisma.priceChart.create({
-        data: { jobTypeId: null, priceUsd: body.globalDefaultUsd, updatedByEmail: req.user?.email },
-      });
-    }
-  }
-
-  if (body.items) {
-    for (const item of body.items) {
-      await prisma.jobType.update({
-        where: { id: item.jobTypeId },
-        data: { defaultPriceUsd: item.priceUsd },
-      });
-      await prisma.priceChart.upsert({
-        where: { jobTypeId: item.jobTypeId },
-        create: { jobTypeId: item.jobTypeId, priceUsd: item.priceUsd, updatedByEmail: req.user?.email },
-        update: { priceUsd: item.priceUsd, updatedByEmail: req.user?.email },
-      });
-    }
-  }
-
-  await recordAudit({
-    userId: req.user?.id,
-    action: 'priceChart.updated',
-    entityType: 'PriceChart',
-    payload: body,
+router.put('/', (_req, res) => {
+  res.status(410).json({
+    error: 'Price chart removed — set Default price on each job type instead',
   });
-
-  res.json(await getPriceChart());
 });
 
 export default router;

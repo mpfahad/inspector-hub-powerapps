@@ -61,7 +61,12 @@ export const api = {
     request<{ openJobs: number; activeInspectors: number; activeJobs: number }>(
       '/api/dashboard/kpis'
     ),
-  operationsDashboard: () => request<OperationsDashboardData>('/api/dashboard/operations'),
+  operationsDashboard: (params?: { departmentId?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.departmentId) q.set('departmentId', String(params.departmentId));
+    const qs = q.toString();
+    return request<OperationsDashboardData>(`/api/dashboard/operations${qs ? `?${qs}` : ''}`);
+  },
   departmentsOverview: () => request<DepartmentOverview[]>('/api/departments/overview'),
   competency: (params?: { departmentId?: number; departmentCode?: string }) => {
     const q = new URLSearchParams();
@@ -290,6 +295,15 @@ export const api = {
     issuer?: string | null;
     validityMonths?: number | null;
   }) => request<Certification>('/api/certifications', { method: 'POST', body: JSON.stringify(data) }),
+  updateCertification: (
+    id: number,
+    data: {
+      code?: string;
+      name?: string;
+      issuer?: string | null;
+      validityMonths?: number | null;
+    }
+  ) => request<Certification>(`/api/certifications/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   inspectors: () => request<Inspector[]>('/api/inspectors'),
   createInspector: (data: {
     employeeNo: string;
@@ -878,7 +892,16 @@ export type CompetencyData = {
     employeeNo: string;
     name: string;
     department: string;
-    certs: { code: string; name: string; status: string; expiresOn: string; daysToExpiry: number }[];
+    certs: {
+      id: number;
+      certificationId: number;
+      code: string;
+      name: string;
+      status: string;
+      expiresOn: string;
+      issuedOn: string;
+      daysToExpiry: number;
+    }[];
   }[];
   coverage: { code: string; name: string; holders: number; expiring: number }[];
   expiringList: {
@@ -901,6 +924,7 @@ export type CompetencyData = {
 };
 
 export type OperationsDashboardData = {
+  departmentId?: number | null;
   kpis: {
     openJobs: number;
     activeInspectors: number;

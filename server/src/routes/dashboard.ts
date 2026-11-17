@@ -13,14 +13,22 @@ import { STANDARD_DAY_HOURS } from '../services/plannerService.js';
 import { expiresOnCutoffForExpiring } from '../lib/certStatus.js';
 import {
   allowedDepartmentIds,
+  assertCanAccessDepartment,
   getInspectorForUser,
   STAFF_ROLES,
   staffDepartmentWhere,
   staffInspectorDeptWhere,
 } from '../services/authz.js';
+import { sendRouteError } from '../lib/httpErrors.js';
 
 const router = Router();
 router.use(authMiddleware);
+
+function parseDepartmentId(query: { departmentId?: string }) {
+  if (!query.departmentId) return undefined;
+  const id = Number(query.departmentId);
+  return Number.isFinite(id) ? id : undefined;
+}
 
 const assignmentInclude = {
   job: { include: { client: true, department: true, jobType: true } },
@@ -44,9 +52,25 @@ router.get('/operations', requireRole(...STAFF_ROLES), async (req, res) => {
   const weekStart = mondayOfWeek(new Date());
   const dayDates = rangeDays(weekStart, 7);
   const isoDays = dayDates.map(isoDate);
-  const jobScope = staffDepartmentWhere(req.user!);
-  const inspScope = staffInspectorDeptWhere(req.user!);
+  const departmentId = parseDepartmentId(req.query as { departmentId?: string });
+  try {
+    if (departmentId != null) assertCanAccessDepartment(req.user!, departmentId);
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
+    return;
+  }
+
+  const jobScope =
+    departmentId != null ? { departmentId } : staffDepartmentWhere(req.user!);
+  const inspScope =
+    departmentId != null ? { departmentId } : staffInspectorDeptWhere(req.user!);
   const acl = allowedDepartmentIds(req.user!);
+  const certInspectorWhere =
+    departmentId != null
+      ? { departmentId }
+      : acl
+        ? { departmentId: { in: acl } }
+        : {};
 
   const [
     openJobs,
@@ -68,7 +92,9 @@ router.get('/operations', requireRole(...STAFF_ROLES), async (req, res) => {
     prisma.inspectorCert.count({
       where: {
         expiresOn: { lte: expiresOnCutoffForExpiring() },
-        ...(acl ? { inspector: { departmentId: { in: acl } } } : {}),
+        ...(Object.keys(certInspectorWhere).length
+          ? { inspector: certInspectorWhere }
+          : {}),
       },
     }),
     prisma.inspector.findMany({
@@ -89,7 +115,12 @@ router.get('/operations', requireRole(...STAFF_ROLES), async (req, res) => {
       },
     }),
     prisma.department.findMany({
-      where: acl ? { id: { in: acl } } : undefined,
+      where:
+        departmentId != null
+          ? { id: departmentId }
+          : acl
+            ? { id: { in: acl } }
+            : undefined,
       orderBy: { name: 'asc' },
     }),
     prisma.job.findMany({
@@ -171,11 +202,12 @@ router.get('/operations', requireRole(...STAFF_ROLES), async (req, res) => {
       type: 'CERT',
       title: `${expiringCerts} certifications expiring or expired`,
       detail: 'May block assignment engine',
-      link: '/competency',
+      link: 'competency',
     });
   }
 
   res.json({
+    departmentId: departmentId ?? null,
     kpis: {
       openJobs,
       activeInspectors,
@@ -184,7 +216,7 @@ router.get('/operations', requireRole(...STAFF_ROLES), async (req, res) => {
       utilization: capacity.utilization,
     },
     utilizationSeries,
-    deptLoad,
+    deptLoad: departmentId != null ? [] : deptLoad,
     upcomingJobs: upcomingJobs.map((j) => ({
       id: j.id,
       ref: j.ref,

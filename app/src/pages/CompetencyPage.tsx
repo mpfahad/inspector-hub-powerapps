@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type CompetencyData } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import { useDepartment } from '../context/DepartmentContext';
 
 function certCellClass(status: string | null) {
@@ -20,19 +21,109 @@ function KpiCard({ label, value, sub, accent }: { label: string; value: string |
   );
 }
 
+type EditTarget = {
+  inspectorId: number;
+  inspectorName: string;
+  certificationId: number;
+  certCode: string;
+  certName: string;
+  rowId?: number;
+  issuedOn: string;
+  expiresOn: string;
+};
+
 export function CompetencyPage() {
+  const { user } = useAuth();
   const { department: dept, deptPath } = useDepartment();
+  const canEdit = ['Coordinator', 'Manager', 'Admin'].includes(user?.role ?? '');
   const [data, setData] = useState<CompetencyData | null>(null);
+  const [edit, setEdit] = useState<EditTarget | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = () => {
+    if (!dept) return;
+    api.competency({ departmentId: dept.id }).then(setData).catch(console.error);
+  };
 
   useEffect(() => {
-    if (!dept) return;
-    api.competency({ departmentId: dept.id }).then(setData);
+    load();
   }, [dept?.id]);
 
   if (!dept) return <p className="text-slate-500">Loading department…</p>;
   if (!data) return <p className="text-slate-500">Loading competency matrix…</p>;
 
   const { certifications, inspectors, coverage, expiringList, gaps, stats } = data;
+
+  const openCell = (
+    inspector: CompetencyData['inspectors'][0],
+    cert: CompetencyData['certifications'][0]
+  ) => {
+    if (!canEdit) return;
+    const held = inspector.certs.find((c) => c.certificationId === cert.id || c.code === cert.code);
+    const today = new Date().toISOString().slice(0, 10);
+    setError('');
+    setEdit({
+      inspectorId: inspector.id,
+      inspectorName: inspector.name,
+      certificationId: cert.id,
+      certCode: cert.code,
+      certName: cert.name,
+      rowId: held?.id,
+      issuedOn: held?.issuedOn ?? today,
+      expiresOn: held?.expiresOn ?? '',
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!edit) return;
+    if (!edit.issuedOn || !edit.expiresOn) {
+      setError('Issued and expiry dates are required.');
+      return;
+    }
+    if (edit.expiresOn < edit.issuedOn) {
+      setError('Expiry must be on or after issued date.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      if (edit.rowId) {
+        await api.updateInspectorCert(edit.inspectorId, edit.rowId, {
+          issuedOn: edit.issuedOn,
+          expiresOn: edit.expiresOn,
+        });
+      } else {
+        await api.addInspectorCert(edit.inspectorId, {
+          certificationId: edit.certificationId,
+          issuedOn: edit.issuedOn,
+          expiresOn: edit.expiresOn,
+        });
+      }
+      setEdit(null);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeEdit = async () => {
+    if (!edit?.rowId) return;
+    if (!window.confirm(`Remove ${edit.certCode} from ${edit.inspectorName}?`)) return;
+    setSaving(true);
+    setError('');
+    try {
+      await api.deleteInspectorCert(edit.inspectorId, edit.rowId);
+      setEdit(null);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not remove');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="max-w-[1700px] mx-auto space-y-6">
@@ -41,6 +132,7 @@ export function CompetencyPage() {
         <h1 className="text-2xl font-bold text-navy">Competency Matrix · {dept.name}</h1>
         <p className="text-sm text-slate-500 mt-1 max-w-2xl">
           Certification coverage and expiry for this department’s inspectors — feeds skill-based assignment.
+          {canEdit ? ' Click a cell to add or edit dates.' : ''}
         </p>
       </div>
 
@@ -96,16 +188,29 @@ export function CompetencyPage() {
                       </td>
                       <td className="py-2.5 px-2 text-xs text-slate-500">{ins.department.replace(' Inspection', '')}</td>
                       {certifications.map((cert) => {
-                        const heldCert = ins.certs.find((c) => c.code === cert.code);
+                        const heldCert = ins.certs.find((c) => c.certificationId === cert.id || c.code === cert.code);
                         const status = heldCert?.status ?? null;
                         const title = heldCert
                           ? `${cert.code} · ${status} · expires ${heldCert.expiresOn}`
-                          : `${cert.code} · Not held`;
+                          : `${cert.code} · Not held${canEdit ? ' — click to add' : ''}`;
+                        const cell = (
+                          <div className={`h-7 w-7 mx-auto rounded-md flex items-center justify-center border text-xs ${certCellClass(status)}`}>
+                            {heldCert && status !== 'Expired' ? '✓' : heldCert ? '!' : ''}
+                          </div>
+                        );
                         return (
                           <td key={cert.id} className="py-2 px-1 text-center" title={title}>
-                            <div className={`h-7 w-7 mx-auto rounded-md flex items-center justify-center border text-xs ${certCellClass(status)}`}>
-                              {heldCert && status !== 'Expired' ? '✓' : heldCert ? '!' : ''}
-                            </div>
+                            {canEdit ? (
+                              <button
+                                type="button"
+                                className="w-full flex justify-center hover:opacity-80"
+                                onClick={() => openCell(ins, cert)}
+                              >
+                                {cell}
+                              </button>
+                            ) : (
+                              cell
+                            )}
                           </td>
                         );
                       })}
@@ -185,6 +290,61 @@ export function CompetencyPage() {
                 {g.code} <span className="text-slate-500">· {g.holders} holder{g.holders === 1 ? '' : 's'}</span>
               </span>
             ))}
+          </div>
+        </div>
+      )}
+
+      {edit && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => !saving && setEdit(null)}
+        >
+          <div
+            className="card max-w-md w-full p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h2 className="text-lg font-semibold text-navy">
+                {edit.rowId ? 'Edit certification' : 'Add certification'}
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">
+                {edit.inspectorName} · {edit.certCode} — {edit.certName}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-500">Issued on</label>
+                <input
+                  type="date"
+                  className="input mt-1"
+                  value={edit.issuedOn}
+                  onChange={(e) => setEdit({ ...edit, issuedOn: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500">Expires on</label>
+                <input
+                  type="date"
+                  className="input mt-1"
+                  value={edit.expiresOn}
+                  onChange={(e) => setEdit({ ...edit, expiresOn: e.target.value })}
+                />
+              </div>
+            </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <div className="flex flex-wrap gap-2 justify-end">
+              {edit.rowId && (
+                <button type="button" className="btn-secondary text-sm text-red-700 border-red-200" disabled={saving} onClick={removeEdit}>
+                  Remove
+                </button>
+              )}
+              <button type="button" className="btn-secondary text-sm" disabled={saving} onClick={() => setEdit(null)}>
+                Cancel
+              </button>
+              <button type="button" className="btn-primary text-sm" disabled={saving} onClick={saveEdit}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
           </div>
         </div>
       )}

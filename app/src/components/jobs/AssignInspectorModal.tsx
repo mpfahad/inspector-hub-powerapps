@@ -166,6 +166,7 @@ export function AssignInspectorModal({ job, open, onClose, onAssigned }: Props) 
                   0,
                   Math.round((job.estimatedHours ?? 40) / Math.max(1, need))
                 )}
+                jobTypeRate={job.jobType?.defaultPriceUsd ?? null}
               />
               <button type="button" className="btn-secondary text-sm" disabled={busy} onClick={addSlot}>
                 Add another row

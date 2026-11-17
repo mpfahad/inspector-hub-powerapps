@@ -2,7 +2,14 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { authMiddleware, type AuthUser } from '../middleware/auth.js';
 import { recordAudit } from '../services/audit.js';
-import { assertCanLogActivity, getInspectorForUser, isStaff } from '../services/authz.js';
+import {
+  assertCanAccessDepartment,
+  assertCanAccessJob,
+  assertCanLogActivity,
+  getInspectorForUser,
+  isStaff,
+  staffInspectorDeptWhere,
+} from '../services/authz.js';
 import { sendRouteError } from '../lib/httpErrors.js';
 import { validateBody } from '../lib/validate.js';
 import {
@@ -141,33 +148,55 @@ router.post('/batch', validateBody(createActivityLogBatchSchema), async (req, re
 });
 
 router.get('/', async (req, res) => {
-  const jobId = req.query.jobId ? Number(req.query.jobId) : undefined;
-  const inspectorId = req.query.inspectorId ? Number(req.query.inspectorId) : undefined;
+  try {
+    const jobId = req.query.jobId ? Number(req.query.jobId) : undefined;
+    const inspectorId = req.query.inspectorId ? Number(req.query.inspectorId) : undefined;
 
-  let scopedInspectorId = inspectorId;
-  if (req.user!.role === 'Inspector') {
-    const inspector = await getInspectorForUser(req.user!);
-    if (!inspector) {
-      res.json([]);
-      return;
+    let scopedInspectorId = inspectorId;
+    if (req.user!.role === 'Inspector') {
+      const inspector = await getInspectorForUser(req.user!);
+      if (!inspector) {
+        res.json([]);
+        return;
+      }
+      if (inspectorId && inspectorId !== inspector.id) {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+      }
+      scopedInspectorId = inspector.id;
+    } else if (jobId) {
+      await assertCanAccessJob(jobId, req.user!);
+    } else if (inspectorId) {
+      const inspector = await prisma.inspector.findUnique({
+        where: { id: inspectorId },
+        select: { departmentId: true },
+      });
+      if (!inspector) {
+        res.status(404).json({ error: 'Inspector not found' });
+        return;
+      }
+      assertCanAccessDepartment(req.user!, inspector.departmentId);
     }
-    if (inspectorId && inspectorId !== inspector.id) {
-      res.status(403).json({ error: 'Forbidden' });
-      return;
-    }
-    scopedInspectorId = inspector.id;
+
+    const inspScope =
+      isStaff(req.user!.role) && !jobId && !scopedInspectorId
+        ? staffInspectorDeptWhere(req.user!)
+        : {};
+
+    const logs = await prisma.activityLog.findMany({
+      where: {
+        ...(jobId ? { jobId } : {}),
+        ...(scopedInspectorId ? { inspectorId: scopedInspectorId } : {}),
+        ...(Object.keys(inspScope).length ? { inspector: inspScope } : {}),
+      },
+      include: logInclude,
+      orderBy: { logDate: 'desc' },
+      take: 100,
+    });
+    res.json(logs);
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
   }
-
-  const logs = await prisma.activityLog.findMany({
-    where: {
-      ...(jobId ? { jobId } : {}),
-      ...(scopedInspectorId ? { inspectorId: scopedInspectorId } : {}),
-    },
-    include: logInclude,
-    orderBy: { logDate: 'desc' },
-    take: 100,
-  });
-  res.json(logs);
 });
 
 router.put('/:id', validateBody(updateActivityLogSchema), async (req, res) => {

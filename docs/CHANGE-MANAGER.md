@@ -60,6 +60,7 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 | CM-031 | 2026-11-16 | **Settings:** select + **delete** for departments and users (bulk). Safe guards: no self-delete, protect primary Admin / last Admin; block dept delete when inspectors/jobs/job types remain; HOLD protected. | Stakeholder | Implemented | 2026-11-16: `POST /api/users/bulk-delete`, `POST /api/departments/bulk-delete` (+ single DELETE); Settings checkboxes + Delete actions. |
 | CM-032 | 2026-11-16 | **Dept delete** only blocked by **open jobs**; inspectors + closed jobs rehomed to HOLD; job types removed with the dept. Settings dept **name links** to workspace. **Job type Delete** (blocked only if open jobs use it). | Stakeholder | Implemented | 2026-11-16: cascade delete in `departments.ts`; `DELETE /api/job-types/:id`; Settings `Link` to `/d/:code/jobs`; Job types page Delete. |
 | CM-033 | 2026-11-16 | **No Inspector logins** — remove all Inspector User accounts; keep Manager/Coordinator/Admin. Inspector roster stays (no `userId`). Creating an employee no longer creates a login. | Stakeholder | Implemented | 2026-11-16: `purgeInspectorLogins` on API startup; Settings roles Admin/Manager/Coordinator only; import-roster/seed/create-inspector stop creating Inspector users; `npm run db:purge-inspector-logins`. |
+| CM-034 | 2026-11-17 | **P0/P1 UAT hardening:** enforce `departmentIds` ACL on staff data APIs; hourly auto-close past end date; Manager vs Coordinator AuthZ (leave approve / job types / price chart); editable job `autoCompleteOnEndDate` + `rateBasis`; Prisma migrations baseline + live entrypoint; seed-off docs; keep Inspector login purge. | Stakeholder | Implemented | 2026-11-17: `authz` helpers (`allowedDepartmentIds`, `assertCanAccessJob/Department`, `MANAGER_ROLES`); jobs/planner/leave/reports/timesheets/dashboard/map/competency ACL; JobDetail toggles; `migrate deploy` (+ db push fallback) in `docker-entrypoint.sh`; `docs/DOCKER-LIVE.md` seed warnings. NDT/Rope roster import deferred pending data. |
 
 ---
 
@@ -72,4 +73,4 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 
 ---
 
-*Last updated: 2026-11-16 (CM-033 no Inspector logins)*
+*Last updated: 2026-11-17 (CM-034 P0/P1 ACL + migrations)*

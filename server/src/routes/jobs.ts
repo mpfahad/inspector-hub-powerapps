@@ -16,11 +16,13 @@ import { certSummaryForJob } from '../services/jobCerts.js';
 import { resolveDefaultPriceUsd } from '../services/pricing.js';
 import { geocodeSampleLocation } from '../lib/geo.js';
 import {
+  assertCanAccessDepartment,
   assertCanAccessJob,
   assertCanCompleteJob,
   getInspectorForUser,
   inspectorJobListWhere,
   isStaff,
+  staffDepartmentWhere,
   STAFF_ROLES,
 } from '../services/authz.js';
 import { sendRouteError } from '../lib/httpErrors.js';
@@ -88,6 +90,8 @@ router.get('/', async (req, res) => {
       return;
     }
     scope = inspectorJobListWhere(inspector.id);
+  } else {
+    scope = staffDepartmentWhere(req.user!);
   }
   const jobs = await prisma.job.findMany({
     where: {
@@ -112,6 +116,12 @@ router.get('/duplicates', requireRole(...STAFF_ROLES), async (req, res) => {
 
   if (!Number.isFinite(clientId) || !Number.isFinite(departmentId) || !startDate || !endDate) {
     res.status(400).json({ error: 'clientId, departmentId, startDate, and endDate are required' });
+    return;
+  }
+  try {
+    assertCanAccessDepartment(req.user!, departmentId);
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
     return;
   }
   if (!(jobTypeId && Number.isFinite(jobTypeId)) && !title) {
@@ -160,9 +170,9 @@ router.get('/duplicates', requireRole(...STAFF_ROLES), async (req, res) => {
   });
 });
 
-router.get('/pipeline', requireRole(...STAFF_ROLES), async (_req, res) => {
+router.get('/pipeline', requireRole(...STAFF_ROLES), async (req, res) => {
   const jobs = await prisma.job.findMany({
-    where: { status: { notIn: ['Cancelled'] } },
+    where: { status: { notIn: ['Cancelled'] }, ...staffDepartmentWhere(req.user!) },
     include: {
       ...listInclude,
       proposals: { where: { blocked: false }, include: { inspector: true }, orderBy: { rank: 'asc' } },
@@ -229,6 +239,13 @@ router.get('/:id', async (req, res) => {
 router.post('/', requireRole(...STAFF_ROLES), validateBody(createJobSchema), async (req, res) => {
   const body = req.body as Record<string, unknown>;
   const clientId = Number(body.clientId);
+  const departmentId = Number(body.departmentId);
+  try {
+    assertCanAccessDepartment(req.user!, departmentId);
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
+    return;
+  }
   const location = body.location ? String(body.location) : null;
   const coords = await coordsForJob(clientId, location);
   let certificationIds = (body.certificationIds as number[] | undefined) ?? [];
@@ -243,7 +260,7 @@ router.post('/', requireRole(...STAFF_ROLES), validateBody(createJobSchema), asy
       ref: String(body.ref),
       title: String(body.title),
       clientId,
-      departmentId: Number(body.departmentId),
+      departmentId,
       scope: body.scope ? String(body.scope) : null,
       location,
       latitude: coords?.latitude ?? null,
@@ -348,6 +365,12 @@ router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobSchema), a
     res.status(404).json({ error: 'Not found' });
     return;
   }
+  try {
+    assertCanAccessDepartment(req.user!, existing.departmentId);
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
+    return;
+  }
 
   const fullEdit = ['Draft', 'Proposed'].includes(existing.status);
   const softEdit = ['Active', 'PendingAcceptance'].includes(existing.status);
@@ -385,6 +408,15 @@ router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobSchema), a
     body.location !== undefined ? (body.location ? String(body.location) : null) : existing.location;
   const coords = await coordsForJob(nextClientId, nextLocation);
 
+  if (body.departmentId !== undefined) {
+    try {
+      assertCanAccessDepartment(req.user!, Number(body.departmentId));
+    } catch (err) {
+      sendRouteError(res, err, 'Forbidden');
+      return;
+    }
+  }
+
   const softData = {
     title: body.title !== undefined ? String(body.title) : undefined,
     scope: body.scope !== undefined ? (body.scope ? String(body.scope) : null) : undefined,
@@ -394,6 +426,10 @@ router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobSchema), a
     endDate: body.endDate ? new Date(String(body.endDate)) : undefined,
     priority: body.priority !== undefined ? String(body.priority) : undefined,
     estimatedHours: body.estimatedHours !== undefined ? Number(body.estimatedHours) : undefined,
+    autoCompleteOnEndDate:
+      body.autoCompleteOnEndDate !== undefined ? Boolean(body.autoCompleteOnEndDate) : undefined,
+    rateBasis:
+      body.rateBasis !== undefined ? (body.rateBasis === 'hourly' ? 'hourly' : 'day') : undefined,
   };
 
   const fullData = {

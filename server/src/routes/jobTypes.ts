@@ -4,6 +4,12 @@ import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { validateBody } from '../lib/validate.js';
 import { createJobTypeSchema, updateJobTypeSchema } from '../lib/schemas.js';
 import { recordAudit } from '../services/audit.js';
+import {
+  assertCanAccessDepartment,
+  MANAGER_ROLES,
+  staffDepartmentWhere,
+} from '../services/authz.js';
+import { sendRouteError } from '../lib/httpErrors.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -32,6 +38,7 @@ router.get('/', async (req, res) => {
   const where = {
     active: true,
     ...deptFilter(req),
+    ...staffDepartmentWhere(req.user!),
   };
   const types = await prisma.jobType.findMany({
     where,
@@ -43,7 +50,7 @@ router.get('/', async (req, res) => {
 
 router.get('/all', requireRole('Coordinator', 'Manager', 'Admin'), async (req, res) => {
   const types = await prisma.jobType.findMany({
-    where: deptFilter(req),
+    where: { ...deptFilter(req), ...staffDepartmentWhere(req.user!) },
     include,
     orderBy: { name: 'asc' },
   });
@@ -62,7 +69,7 @@ router.get('/:id', async (req, res) => {
   res.json(type);
 });
 
-router.post('/', requireRole('Coordinator', 'Manager', 'Admin'), validateBody(createJobTypeSchema), async (req, res) => {
+router.post('/', requireRole(...MANAGER_ROLES), validateBody(createJobTypeSchema), async (req, res) => {
   const body = req.body as {
     departmentId: number;
     code: string;
@@ -75,6 +82,12 @@ router.post('/', requireRole('Coordinator', 'Manager', 'Admin'), validateBody(cr
   const dept = await prisma.department.findUnique({ where: { id: body.departmentId } });
   if (!dept) {
     res.status(400).json({ error: 'Department not found' });
+    return;
+  }
+  try {
+    assertCanAccessDepartment(req.user!, body.departmentId);
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
     return;
   }
 
@@ -104,7 +117,7 @@ router.post('/', requireRole('Coordinator', 'Manager', 'Admin'), validateBody(cr
   res.status(201).json(type);
 });
 
-router.put('/:id', requireRole('Coordinator', 'Manager', 'Admin'), validateBody(updateJobTypeSchema), async (req, res) => {
+router.put('/:id', requireRole(...MANAGER_ROLES), validateBody(updateJobTypeSchema), async (req, res) => {
   const id = Number(req.params.id);
   const body = req.body as {
     departmentId?: number;
@@ -115,6 +128,20 @@ router.put('/:id', requireRole('Coordinator', 'Manager', 'Admin'), validateBody(
     certificationIds?: number[];
     defaultPriceUsd?: number | null;
   };
+  const existing = await prisma.jobType.findUnique({ where: { id } });
+  if (!existing) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  try {
+    assertCanAccessDepartment(req.user!, existing.departmentId);
+    if (body.departmentId !== undefined) {
+      assertCanAccessDepartment(req.user!, body.departmentId);
+    }
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
+    return;
+  }
 
   if (body.certificationIds) {
     await prisma.jobTypeCertRequirement.deleteMany({ where: { jobTypeId: id } });
@@ -154,7 +181,7 @@ router.put('/:id', requireRole('Coordinator', 'Manager', 'Admin'), validateBody(
   res.json(type);
 });
 
-router.delete('/:id', requireRole('Coordinator', 'Manager', 'Admin'), async (req, res) => {
+router.delete('/:id', requireRole(...MANAGER_ROLES), async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) {
     res.status(400).json({ error: 'Invalid id' });
@@ -163,6 +190,12 @@ router.delete('/:id', requireRole('Coordinator', 'Manager', 'Admin'), async (req
   const existing = await prisma.jobType.findUnique({ where: { id } });
   if (!existing) {
     res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  try {
+    assertCanAccessDepartment(req.user!, existing.departmentId);
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
     return;
   }
   const openJobs = await prisma.job.count({

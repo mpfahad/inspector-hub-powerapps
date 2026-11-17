@@ -4,6 +4,9 @@ import type { AuthUser } from '../middleware/auth.js';
 
 export const STAFF_ROLES: UserRole[] = ['Coordinator', 'Manager', 'Admin'];
 
+/** Manager+Admin: leave approve, job types mutate, price chart write (CM-034). */
+export const MANAGER_ROLES: UserRole[] = ['Manager', 'Admin'];
+
 export const ACTIVE_ASSIGNMENT_STATUSES = ['Accepted', 'Active'] as const;
 
 export function isStaff(role: UserRole) {
@@ -12,6 +15,10 @@ export function isStaff(role: UserRole) {
 
 export function isAdmin(role: UserRole) {
   return role === 'Admin';
+}
+
+export function isManagerOrAdmin(role: UserRole) {
+  return MANAGER_ROLES.includes(role);
 }
 
 export class AuthzError extends Error {
@@ -23,12 +30,52 @@ export class AuthzError extends Error {
   }
 }
 
+/**
+ * Empty departmentIds = all departments (Admin default / "All departments").
+ * Non-empty = CM-022 scoped ACL — must be enforced on staff data APIs (CM-034).
+ */
+export function allowedDepartmentIds(user: AuthUser): number[] | null {
+  const ids = user.departmentIds ?? [];
+  return ids.length > 0 ? ids : null;
+}
+
+export function canAccessDepartment(user: AuthUser, departmentId: number): boolean {
+  if (!isStaff(user.role)) return false;
+  const allowed = allowedDepartmentIds(user);
+  if (allowed == null) return true;
+  return allowed.includes(departmentId);
+}
+
+export function assertCanAccessDepartment(user: AuthUser, departmentId: number) {
+  if (!canAccessDepartment(user, departmentId)) {
+    throw new AuthzError('Forbidden — department not in your access list');
+  }
+}
+
+/** Prisma `where` fragment for Job.departmentId (or omit when unrestricted). */
+export function staffDepartmentWhere(
+  user: AuthUser,
+  field: 'departmentId' = 'departmentId'
+): Record<string, unknown> {
+  const allowed = allowedDepartmentIds(user);
+  if (allowed == null) return {};
+  return { [field]: { in: allowed } };
+}
+
+/** Inspectors whose home department is in ACL (or all). */
+export function staffInspectorDeptWhere(user: AuthUser): Record<string, unknown> {
+  const allowed = allowedDepartmentIds(user);
+  if (allowed == null) return {};
+  return { departmentId: { in: allowed } };
+}
+
+/** CM-033/034: link via userId / inspectorId only — no email fallback. */
 export async function getInspectorForUser(user: AuthUser) {
   if (user.inspectorId) {
     const inspector = await prisma.inspector.findUnique({ where: { id: user.inspectorId } });
     if (inspector) return inspector;
   }
-  return prisma.inspector.findFirst({ where: { email: user.email } });
+  return prisma.inspector.findFirst({ where: { userId: user.id } });
 }
 
 function inspectorMatchesUser(
@@ -37,7 +84,6 @@ function inspectorMatchesUser(
 ) {
   if (inspector.userId && inspector.userId === user.id) return true;
   if (user.inspectorId && inspector.id === user.inspectorId) return true;
-  if (inspector.email && inspector.email === user.email) return true;
   return false;
 }
 
@@ -100,7 +146,10 @@ export async function assertCanLogActivity(jobId: number, inspectorId: number, u
 export async function assertCanAccessJob(jobId: number, user: AuthUser) {
   const job = await prisma.job.findUnique({ where: { id: jobId } });
   if (!job) throw new AuthzError('Job not found', 404);
-  if (isStaff(user.role)) return job;
+  if (isStaff(user.role)) {
+    assertCanAccessDepartment(user, job.departmentId);
+    return job;
+  }
 
   const inspector = await getInspectorForUser(user);
   if (!inspector) throw new AuthzError('Job not found', 404);
@@ -127,6 +176,9 @@ export async function getTimesheetForUser(timesheetId: number, user: AuthUser) {
   if (!ts) throw new AuthzError('Timesheet not found', 404);
   if (user.role === 'Inspector' && !inspectorMatchesUser(ts.inspector, user)) {
     throw new AuthzError('Forbidden');
+  }
+  if (isStaff(user.role)) {
+    assertCanAccessDepartment(user, ts.inspector.departmentId);
   }
   return ts;
 }

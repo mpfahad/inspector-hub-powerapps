@@ -13,7 +13,7 @@ import {
   STANDARD_DAY_HOURS,
   type PlannerAllocation,
 } from '../services/plannerService.js';
-import { STAFF_ROLES } from '../services/authz.js';
+import { allowedDepartmentIds, STAFF_ROLES, staffInspectorDeptWhere } from '../services/authz.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -39,11 +39,16 @@ router.get('/', requireRole(...STAFF_ROLES), async (req, res) => {
   const windowStart = isoDays[0];
   const windowEnd = isoDays[isoDays.length - 1];
 
+  const acl = allowedDepartmentIds(req.user!);
+  const deptNameFilter =
+    department && department !== 'All' ? { department: { name: department } } : {};
+
   const [inspectors, assignments, leaveRecords, departments] = await Promise.all([
     prisma.inspector.findMany({
       where: {
         status: { not: 'Inactive' },
-        ...(department && department !== 'All' ? { department: { name: department } } : {}),
+        ...staffInspectorDeptWhere(req.user!),
+        ...deptNameFilter,
       },
       include: { department: true },
       orderBy: { name: 'asc' },
@@ -51,16 +56,25 @@ router.get('/', requireRole(...STAFF_ROLES), async (req, res) => {
     prisma.assignment.findMany({
       where: {
         status: { in: ['PendingAcceptance', 'Accepted', 'Active'] },
-        job: { status: { notIn: ['Cancelled', 'Closed'] } },
+        job: {
+          status: { notIn: ['Cancelled', 'Closed'] },
+          ...(acl ? { departmentId: { in: acl } } : {}),
+        },
       },
       include: {
         job: { include: { client: true } },
       },
     }),
     prisma.leaveRequest.findMany({
-      where: { status: 'Approved' },
+      where: {
+        status: 'Approved',
+        ...(acl ? { inspector: { departmentId: { in: acl } } } : {}),
+      },
     }),
-    prisma.department.findMany({ orderBy: { name: 'asc' } }),
+    prisma.department.findMany({
+      where: acl ? { id: { in: acl } } : undefined,
+      orderBy: { name: 'asc' },
+    }),
   ]);
 
   const allocations: PlannerAllocation[] = [];

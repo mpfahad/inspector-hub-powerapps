@@ -1,7 +1,7 @@
 # Inspection Hub — live / UAT Docker (alongside Training Manager & Contract App)
 # Ports: web 5180, API 4100 (Contract uses 5173/4000)
-# Start:  docker compose up -d --build
-# Seed once (empty DB only): docker compose --profile seed run --rm seed
+# Start:  docker compose up -d --build  (migrate deploy / db push — never seeds)
+# Seed once (EMPTY lab only — wipes data): docker compose --profile seed run --rm seed
 name: inspection-hub
 
 services:

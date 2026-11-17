@@ -7,7 +7,7 @@ Ports: **5180** (web) · **4100** (API). Contract stays on **5173 / 4000**.
 
 | File | Purpose |
 |------|---------|
-| [`docker-compose.yml`](../docker-compose.yml) | Live stack — **db push only**, no seed on start |
+| [`docker-compose.yml`](../docker-compose.yml) | Live stack — **migrate deploy** (db push fallback), **no seed on start** |
 | [`docker-compose.dev.yml`](../docker-compose.dev.yml) | Dev hot-reload (reseeds — **do not use for UAT**) |
 | [`server/Dockerfile`](../server/Dockerfile) | Production API image |
 | [`app/Dockerfile`](../app/Dockerfile) | Vite build + nginx (`/api` → API) |
@@ -79,9 +79,11 @@ docker run --rm ^
 #   -v "$PWD/server/prisma/prisma/dev.db:/backup/dev.db:ro" \
 #   alpine sh -c "cp /backup/dev.db /data/irppms.db"
 
-# 3) Start full stack (db push upgrades schema; no seed)
+# 3) Start full stack (migrate/deploy upgrades schema; no seed)
 docker compose up -d
 ```
+
+**Never** run `docker compose --profile seed` against a volume that already has UAT data.
 
 Backup before overwrite:
 
@@ -96,8 +98,10 @@ docker run --rm -v inspection-hub-data:/data -v "$PWD:/backup" alpine \
 
 ```bash
 docker compose up -d --build
-# volume inspection-hub-data is preserved; entrypoint only runs prisma db push
+# volume inspection-hub-data is preserved; entrypoint runs migrate deploy (db push fallback)
 ```
+
+If migrate deploy fails on an older volume that was created with `db push` only, the entrypoint falls back to `db push`. To baseline cleanly once: `npx prisma migrate resolve --applied 20261117120000_init` inside the API container, then restart.
 
 ---
 

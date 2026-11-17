@@ -46,6 +46,7 @@ export function JobDetailPage() {
   const [actionError, setActionError] = useState('');
   const [assignOpen, setAssignOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [savingToggles, setSavingToggles] = useState(false);
 
   const jobId = Number(id);
   const idValid = Number.isFinite(jobId) && jobId > 0;
@@ -203,6 +204,61 @@ export function JobDetailPage() {
             </span>
           </div>
         </div>
+        {user?.role !== 'Inspector' &&
+          ['Draft', 'Proposed', 'PendingAcceptance', 'Active'].includes(job.status) && (
+            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+              <label className="flex items-center gap-2">
+                <span className="text-slate-500">Completion</span>
+                <select
+                  className="input py-1 text-sm"
+                  disabled={savingToggles}
+                  value={job.autoCompleteOnEndDate === false ? 'manual' : 'auto'}
+                  onChange={async (e) => {
+                    setSavingToggles(true);
+                    setActionError('');
+                    try {
+                      const updated = await api.updateJob(job.id, {
+                        autoCompleteOnEndDate: e.target.value === 'auto',
+                      });
+                      setJob(updated);
+                    } catch (err) {
+                      setActionError(err instanceof Error ? err.message : 'Could not update');
+                    } finally {
+                      setSavingToggles(false);
+                    }
+                  }}
+                >
+                  <option value="auto">Auto-complete on end date</option>
+                  <option value="manual">Manual complete</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="text-slate-500">Rate</span>
+                <select
+                  className="input py-1 text-sm"
+                  disabled={savingToggles}
+                  value={job.rateBasis === 'hourly' ? 'hourly' : 'day'}
+                  onChange={async (e) => {
+                    setSavingToggles(true);
+                    setActionError('');
+                    try {
+                      const updated = await api.updateJob(job.id, {
+                        rateBasis: e.target.value === 'hourly' ? 'hourly' : 'day',
+                      });
+                      setJob(updated);
+                    } catch (err) {
+                      setActionError(err instanceof Error ? err.message : 'Could not update');
+                    } finally {
+                      setSavingToggles(false);
+                    }
+                  }}
+                >
+                  <option value="day">Day rate</option>
+                  <option value="hourly">Hourly rate</option>
+                </select>
+              </label>
+            </div>
+          )}
         {job.status === 'Cancelled' && (
           <p className="mt-4 text-sm text-slate-700 bg-slate-100 border border-slate-200 rounded-lg px-3 py-2">
             This job is cancelled and no longer appears on the board or map.

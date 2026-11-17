@@ -2,7 +2,14 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { authMiddleware, requireRole, type AuthUser } from '../middleware/auth.js';
 import { recordAudit } from '../services/audit.js';
-import { getInspectorForUser, isStaff, STAFF_ROLES } from '../services/authz.js';
+import {
+  assertCanAccessDepartment,
+  getInspectorForUser,
+  isStaff,
+  MANAGER_ROLES,
+  staffInspectorDeptWhere,
+} from '../services/authz.js';
+import { sendRouteError } from '../lib/httpErrors.js';
 import { validateBody } from '../lib/validate.js';
 import { createLeaveSchema, updateLeaveSchema } from '../lib/schemas.js';
 
@@ -26,6 +33,7 @@ async function resolveInspectorId(user: AuthUser, bodyInspectorId?: number) {
     if (!bodyInspectorId) throw new Error('Inspector is required');
     const inspector = await prisma.inspector.findUnique({ where: { id: bodyInspectorId } });
     if (!inspector) throw new Error('Inspector not found');
+    assertCanAccessDepartment(user, inspector.departmentId);
     return inspector.id;
   }
 
@@ -37,8 +45,23 @@ async function resolveInspectorId(user: AuthUser, bodyInspectorId?: number) {
   return inspector.id;
 }
 
-async function assertCanManageLeave(user: AuthUser, leave: { inspectorId: number }) {
-  if (isStaff(user.role)) return;
+async function assertCanManageLeave(
+  user: AuthUser,
+  leave: { inspectorId: number; inspector?: { departmentId: number } }
+) {
+  if (isStaff(user.role)) {
+    const departmentId =
+      leave.inspector?.departmentId ??
+      (
+        await prisma.inspector.findUnique({
+          where: { id: leave.inspectorId },
+          select: { departmentId: true },
+        })
+      )?.departmentId;
+    if (departmentId == null) throw new Error('Inspector not found');
+    assertCanAccessDepartment(user, departmentId);
+    return;
+  }
   const inspector = await getInspectorForUser(user);
   if (!inspector || inspector.id !== leave.inspectorId) {
     throw new Error('You can only manage your own leave');
@@ -49,8 +72,12 @@ router.get('/', async (req, res) => {
   const inspectorId = req.query.inspectorId ? Number(req.query.inspectorId) : undefined;
 
   if (isStaff(req.user!.role)) {
+    const inspScope = staffInspectorDeptWhere(req.user!);
     const items = await prisma.leaveRequest.findMany({
-      where: inspectorId ? { inspectorId } : undefined,
+      where: {
+        ...(inspectorId ? { inspectorId } : {}),
+        ...(Object.keys(inspScope).length ? { inspector: inspScope } : {}),
+      },
       include: leaveInclude,
       orderBy: { startDate: 'desc' },
     });
@@ -182,7 +209,7 @@ router.put('/:id', validateBody(updateLeaveSchema), async (req, res) => {
   }
 });
 
-router.post('/:id/approve', requireRole(...STAFF_ROLES), async (req, res) => {
+router.post('/:id/approve', requireRole(...MANAGER_ROLES), async (req, res) => {
   const id = Number(req.params.id);
   const existing = await prisma.leaveRequest.findUnique({
     where: { id },
@@ -190,6 +217,12 @@ router.post('/:id/approve', requireRole(...STAFF_ROLES), async (req, res) => {
   });
   if (!existing) {
     res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  try {
+    assertCanAccessDepartment(req.user!, existing.inspector.departmentId);
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
     return;
   }
   if (existing.status !== 'Pending') {

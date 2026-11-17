@@ -114,6 +114,9 @@ export const updateJobSchema = z.object({
   departmentId: z.coerce.number().int().positive().optional(),
   jobTypeId: z.coerce.number().int().positive().optional().nullable(),
   requiresQeApproval: z.coerce.boolean().optional(),
+  /** CM-034: allow flipping after create */
+  autoCompleteOnEndDate: z.coerce.boolean().optional(),
+  rateBasis: z.enum(['day', 'hourly']).optional(),
   agreedPriceUsd: optionalUsd,
 });
 

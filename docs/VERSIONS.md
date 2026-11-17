@@ -52,9 +52,11 @@ Do **not** run `git reset --hard` on a shared branch unless you explicitly want 
 - **CM-027** — Admin `fahad.mp@applus.com`; Settings create/edit/bulk import/reset + export temp passwords; demo staff removed
 - **CM-028** — Browser title **Inspection Hub**
 - **CM-029** — Live Docker pack (`docker-compose.yml` + prod Dockerfiles + `docs/DOCKER-LIVE.md`); no seed-on-start
-- Planner: &lt;6h booked → half-height day bar (CM-023 refinement)
+- **CM-030–033** — Settings dept CRUD/delete; cascade to HOLD; no Inspector logins
+- **CM-034** — Dept ACL on staff APIs; Manager vs Coordinator; job autoComplete/rateBasis edit; hourly auto-close; Prisma migrations baseline; seed-off docs
+- Planner: &lt;6h booked → half-width day bar (CM-023 refinement)
 - Readiness audit notes: `docs/APP-READINESS-AUDIT.md` (dev compose still wipe-seeds; use live compose for other PC)
 
 ---
 
-*Last updated: 2026-11-15*
+*Last updated: 2026-11-17*

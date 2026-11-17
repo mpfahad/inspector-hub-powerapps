@@ -854,6 +854,8 @@ export type UpdateJobPayload = {
   departmentId?: number;
   jobTypeId?: number | null;
   requiresQeApproval?: boolean;
+  autoCompleteOnEndDate?: boolean;
+  rateBasis?: 'day' | 'hourly';
   agreedPriceUsd?: number | null;
 };
 

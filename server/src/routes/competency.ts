@@ -2,7 +2,12 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { certStatusFromExpiry } from '../lib/certStatus.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
-import { STAFF_ROLES } from '../services/authz.js';
+import {
+  assertCanAccessDepartment,
+  STAFF_ROLES,
+  staffInspectorDeptWhere,
+} from '../services/authz.js';
+import { sendRouteError } from '../lib/httpErrors.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -23,12 +28,21 @@ router.get('/', requireRole(...STAFF_ROLES), async (req, res) => {
   const departmentCode =
     typeof req.query.departmentCode === 'string' ? req.query.departmentCode.trim().toUpperCase() : undefined;
 
+  if (departmentId && Number.isFinite(departmentId)) {
+    try {
+      assertCanAccessDepartment(req.user!, departmentId);
+    } catch (err) {
+      sendRouteError(res, err, 'Forbidden');
+      return;
+    }
+  }
+
   const departmentFilter =
     departmentId && Number.isFinite(departmentId)
       ? { departmentId }
       : departmentCode
         ? { department: { code: departmentCode } }
-        : {};
+        : staffInspectorDeptWhere(req.user!);
 
   const [certifications, inspectors] = await Promise.all([
     prisma.certification.findMany({ orderBy: { code: 'asc' } }),

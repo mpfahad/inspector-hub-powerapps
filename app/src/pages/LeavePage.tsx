@@ -20,6 +20,7 @@ export function LeavePage() {
   const deptCtx = useOptionalDepartment();
   const dept = deptCtx?.department ?? null;
   const isStaff = ['Coordinator', 'Manager', 'Admin'].includes(user?.role ?? '');
+  const canApproveLeave = ['Manager', 'Admin'].includes(user?.role ?? '');
   const [items, setItems] = useState<LeaveRequest[]>([]);
   const [inspectors, setInspectors] = useState<Inspector[]>([]);
   const [form, setForm] = useState(emptyForm);
@@ -230,7 +231,7 @@ export function LeavePage() {
                     {l.updatedAt && <div>{new Date(l.updatedAt).toLocaleDateString()}</div>}
                   </td>
                   <td className="p-3 whitespace-nowrap">
-                    {isStaff && l.status === 'Pending' && (
+                    {canApproveLeave && l.status === 'Pending' && (
                       <button type="button" className="text-teal text-xs hover:underline mr-3" onClick={() => approve(l.id)}>
                         Approve
                       </button>

@@ -9,6 +9,14 @@ import {
   defaultReportPeriod,
 } from '../services/inspectorPerformance.js';
 import { expiresOnCutoffForExpiring } from '../lib/certStatus.js';
+import {
+  allowedDepartmentIds,
+  assertCanAccessDepartment,
+  staffDepartmentWhere,
+  staffInspectorDeptWhere,
+} from '../services/authz.js';
+import type { AuthUser } from '../middleware/auth.js';
+import { sendRouteError } from '../lib/httpErrors.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -25,6 +33,15 @@ function parseDepartmentId(query: { departmentId?: string }) {
   if (!query.departmentId) return undefined;
   const id = Number(query.departmentId);
   return Number.isFinite(id) ? id : undefined;
+}
+
+/** Single dept if requested (ACL-checked), else staff ACL scope. */
+function reportJobDeptWhere(user: AuthUser, departmentId?: number) {
+  if (departmentId != null) {
+    assertCanAccessDepartment(user, departmentId);
+    return { departmentId };
+  }
+  return staffDepartmentWhere(user);
 }
 
 async function loadOverdueAssignments() {
@@ -50,7 +67,7 @@ async function loadOverdueAssignments() {
             select: { name: true },
           },
           department: {
-            select: { name: true },
+            select: { id: true, name: true },
           },
         },
       },
@@ -60,15 +77,17 @@ async function loadOverdueAssignments() {
 
 router.get('/inspector-performance', async (req, res) => {
   const { periodStart, periodEnd } = parsePeriod(req.query as { periodStart?: string; periodEnd?: string });
+  const inspScope = staffInspectorDeptWhere(req.user!);
+  const inspFilter = Object.keys(inspScope).length ? { inspector: inspScope } : {};
 
   const [inspectors, assignments, activityLogs, leaveRecords] = await Promise.all([
     prisma.inspector.findMany({
-      where: { status: { not: 'Inactive' } },
+      where: { status: { not: 'Inactive' }, ...inspScope },
       include: { department: true },
       orderBy: { name: 'asc' },
     }),
     prisma.assignment.findMany({
-      where: { status: { notIn: ['Cancelled'] } },
+      where: { status: { notIn: ['Cancelled'] }, ...inspFilter },
       include: {
         job: {
           select: {
@@ -87,11 +106,12 @@ router.get('/inspector-performance', async (req, res) => {
           gte: new Date(periodStart + 'T00:00:00'),
           lte: new Date(periodEnd + 'T23:59:59'),
         },
+        ...inspFilter,
       },
       select: { inspectorId: true, logDate: true, hours: true },
     }),
     prisma.leaveRequest.findMany({
-      where: { status: 'Approved' },
+      where: { status: 'Approved', ...inspFilter },
       select: { inspectorId: true, startDate: true, endDate: true, status: true },
     }),
   ]);
@@ -111,13 +131,21 @@ router.get('/inspector-performance', async (req, res) => {
 router.get('/overdue-jobs', async (req, res) => {
   const { periodStart, periodEnd } = parsePeriod(req.query as { periodStart?: string; periodEnd?: string });
   const departmentId = parseDepartmentId(req.query as { departmentId?: string });
+  try {
+    if (departmentId != null) assertCanAccessDepartment(req.user!, departmentId);
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
+    return;
+  }
   const assignments = await loadOverdueAssignments();
+  const acl = allowedDepartmentIds(req.user!);
   let filteredAssignments = assignments;
   if (departmentId) {
-    const dept = await prisma.department.findUnique({ where: { id: departmentId }, select: { name: true } });
-    filteredAssignments = dept
-      ? assignments.filter((a) => a.job.department?.name === dept.name)
-      : assignments;
+    filteredAssignments = assignments.filter((a) => a.job.department?.id === departmentId);
+  } else if (acl) {
+    filteredAssignments = assignments.filter(
+      (a) => a.job.department?.id != null && acl.includes(a.job.department.id)
+    );
   }
 
   const overdueJobs = buildOverdueJobsReport({
@@ -140,17 +168,26 @@ router.get('/overdue-jobs', async (req, res) => {
 router.get('/summary', async (req, res) => {
   const { periodStart, periodEnd } = parsePeriod(req.query as { periodStart?: string; periodEnd?: string });
   const departmentId = parseDepartmentId(req.query as { departmentId?: string });
+  let jobDeptWhere: Record<string, unknown>;
+  try {
+    jobDeptWhere = reportJobDeptWhere(req.user!, departmentId);
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
+    return;
+  }
+  const inspDeptWhere =
+    departmentId != null ? { departmentId } : staffInspectorDeptWhere(req.user!);
   const inspectorWhere = {
     status: { not: 'Inactive' as const },
-    ...(departmentId ? { departmentId } : {}),
+    ...inspDeptWhere,
   };
   const activeInspectorWhere = {
     status: 'Active' as const,
-    ...(departmentId ? { departmentId } : {}),
+    ...inspDeptWhere,
   };
   const certWhere = {
     expiresOn: { lte: expiresOnCutoffForExpiring() },
-    ...(departmentId ? { inspector: { departmentId } } : {}),
+    ...(Object.keys(inspDeptWhere).length ? { inspector: inspDeptWhere } : {}),
   };
 
   const [operationsUtil, inspectors, assignments, activityLogs, leaveRecords, expiringCerts, overdueAssignments, dept] =
@@ -163,7 +200,8 @@ router.get('/summary', async (req, res) => {
     prisma.assignment.findMany({
       where: {
         status: { notIn: ['Cancelled'] },
-        ...(departmentId ? { inspector: { departmentId } } : {}),
+        ...(Object.keys(inspDeptWhere).length ? { inspector: inspDeptWhere } : {}),
+        ...(Object.keys(jobDeptWhere).length ? { job: jobDeptWhere } : {}),
       },
       include: {
         job: {
@@ -183,14 +221,14 @@ router.get('/summary', async (req, res) => {
           gte: new Date(periodStart + 'T00:00:00'),
           lte: new Date(periodEnd + 'T23:59:59'),
         },
-        ...(departmentId ? { inspector: { departmentId } } : {}),
+        ...(Object.keys(inspDeptWhere).length ? { inspector: inspDeptWhere } : {}),
       },
       select: { inspectorId: true, logDate: true, hours: true },
     }),
     prisma.leaveRequest.findMany({
       where: {
         status: 'Approved',
-        ...(departmentId ? { inspector: { departmentId } } : {}),
+        ...(Object.keys(inspDeptWhere).length ? { inspector: inspDeptWhere } : {}),
       },
       select: { inspectorId: true, startDate: true, endDate: true, status: true },
     }),
@@ -209,9 +247,14 @@ router.get('/summary', async (req, res) => {
     periodStart,
     periodEnd,
   });
-  const overdueScoped = dept
-    ? overdueAssignments.filter((a) => a.job.department?.name === dept.name)
-    : overdueAssignments;
+  const acl = allowedDepartmentIds(req.user!);
+  const overdueScoped = departmentId
+    ? overdueAssignments.filter((a) => a.job.department?.id === departmentId)
+    : acl
+      ? overdueAssignments.filter(
+          (a) => a.job.department?.id != null && acl.includes(a.job.department.id)
+        )
+      : overdueAssignments;
   const overdueJobs = buildOverdueJobsReport({
     assignments: overdueScoped,
     periodStart,
@@ -245,14 +288,20 @@ router.get('/summary', async (req, res) => {
 router.get('/activity', async (req, res) => {
   const { periodStart, periodEnd } = parsePeriod(req.query as { periodStart?: string; periodEnd?: string });
   const departmentId = parseDepartmentId(req.query as { departmentId?: string });
+  let jobDeptWhere: Record<string, unknown>;
+  try {
+    jobDeptWhere = reportJobDeptWhere(req.user!, departmentId);
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
+    return;
+  }
   const logs = await prisma.activityLog.findMany({
     where: {
       logDate: {
         gte: new Date(periodStart + 'T00:00:00'),
         lte: new Date(periodEnd + 'T23:59:59'),
       },
-      // Job commercials / activity attributed to the job's department
-      ...(departmentId ? { job: { departmentId } } : {}),
+      ...(Object.keys(jobDeptWhere).length ? { job: jobDeptWhere } : {}),
     },
     include: {
       inspector: { select: { id: true, name: true, employeeNo: true, department: { select: { name: true } } } },
@@ -314,6 +363,13 @@ function roundMoney(n: number) {
 router.get('/costs', requireRole('Admin'), async (req, res) => {
   const { periodStart, periodEnd } = parsePeriod(req.query as { periodStart?: string; periodEnd?: string });
   const departmentId = parseDepartmentId(req.query as { departmentId?: string });
+  let jobDeptWhere: Record<string, unknown>;
+  try {
+    jobDeptWhere = reportJobDeptWhere(req.user!, departmentId);
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
+    return;
+  }
   const from = new Date(periodStart + 'T00:00:00');
   const to = new Date(periodEnd + 'T23:59:59');
 
@@ -321,8 +377,7 @@ router.get('/costs', requireRole('Admin'), async (req, res) => {
     prisma.activityLog.findMany({
       where: {
         logDate: { gte: from, lte: to },
-        // Job commercials attributed to the job's department
-        ...(departmentId ? { job: { departmentId } } : {}),
+        ...(Object.keys(jobDeptWhere).length ? { job: jobDeptWhere } : {}),
       },
       include: {
         inspector: {

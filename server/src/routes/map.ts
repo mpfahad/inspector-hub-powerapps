@@ -2,8 +2,13 @@ import { Router } from 'express';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
-import { STAFF_ROLES } from '../services/authz.js';
+import {
+  assertCanAccessDepartment,
+  STAFF_ROLES,
+  staffDepartmentWhere,
+} from '../services/authz.js';
 import { resolveCoords } from '../lib/geo.js';
+import { sendRouteError } from '../lib/httpErrors.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -26,9 +31,17 @@ function parseDepartmentId(query: { departmentId?: string }) {
 
 router.get('/', async (req, res) => {
   const departmentId = parseDepartmentId(req.query as { departmentId?: string });
+  if (departmentId) {
+    try {
+      assertCanAccessDepartment(req.user!, departmentId);
+    } catch (err) {
+      sendRouteError(res, err, 'Forbidden');
+      return;
+    }
+  }
   const jobWhere: Prisma.JobWhereInput = {
     status: { notIn: ['Cancelled'] },
-    ...(departmentId ? { departmentId } : {}),
+    ...(departmentId ? { departmentId } : staffDepartmentWhere(req.user!)),
   };
 
   const [clients, jobs] = await Promise.all([

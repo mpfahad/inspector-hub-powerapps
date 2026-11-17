@@ -2,7 +2,13 @@ import { Router, type Request } from 'express';
 import PDFDocument from 'pdfkit';
 import { prisma } from '../lib/prisma.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
-import { getTimesheetForUser, getInspectorForUser } from '../services/authz.js';
+import {
+  assertCanAccessDepartment,
+  getTimesheetForUser,
+  getInspectorForUser,
+  isStaff,
+  staffInspectorDeptWhere,
+} from '../services/authz.js';
 import { sendRouteError } from '../lib/httpErrors.js';
 
 const router = Router();
@@ -28,6 +34,14 @@ async function resolveInspectorId(req: Request, requestedId?: number) {
     return inspector.id;
   }
   if (!requestedId) throw new Error('Inspector is required');
+  if (isStaff(req.user!.role)) {
+    const inspector = await prisma.inspector.findUnique({
+      where: { id: requestedId },
+      select: { id: true, departmentId: true },
+    });
+    if (!inspector) throw new Error('Inspector not found');
+    assertCanAccessDepartment(req.user!, inspector.departmentId);
+  }
   return requestedId;
 }
 
@@ -100,22 +114,32 @@ router.get('/defaults', (_req, res) => {
 });
 
 router.get('/', async (req, res) => {
-  let inspectorId = req.query.inspectorId ? Number(req.query.inspectorId) : undefined;
-  if (req.user?.role === 'Inspector') {
-    const inspector = await getInspectorForUser(req.user);
-    if (!inspector) {
-      res.json([]);
-      return;
+  try {
+    let inspectorId = req.query.inspectorId ? Number(req.query.inspectorId) : undefined;
+    if (req.user?.role === 'Inspector') {
+      const inspector = await getInspectorForUser(req.user);
+      if (!inspector) {
+        res.json([]);
+        return;
+      }
+      inspectorId = inspector.id;
+    } else if (inspectorId) {
+      await resolveInspectorId(req, inspectorId);
     }
-    inspectorId = inspector.id;
+    const inspScope = isStaff(req.user!.role) ? staffInspectorDeptWhere(req.user!) : {};
+    const timesheets = await prisma.timesheet.findMany({
+      where: {
+        ...(inspectorId ? { inspectorId } : {}),
+        ...(Object.keys(inspScope).length ? { inspector: inspScope } : {}),
+      },
+      include: { inspector: true, job: true, lines: true },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    res.json(timesheets);
+  } catch (err) {
+    sendRouteError(res, err, 'Forbidden');
   }
-  const timesheets = await prisma.timesheet.findMany({
-    where: inspectorId ? { inspectorId } : undefined,
-    include: { inspector: true, job: true, lines: true },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
-  });
-  res.json(timesheets);
 });
 
 router.post(

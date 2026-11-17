@@ -26,8 +26,10 @@ import {
   certificationsRouter,
 } from './routes/reference.js';
 import usersRouter from './routes/users.js';
-import { promoteAssignedJobsToActive } from './services/jobWorkflow.js';
+import { autoCloseJobsPastEndDate, promoteAssignedJobsToActive } from './services/jobWorkflow.js';
 import { applyProductDefaults } from './services/seedDefaults.js';
+
+const AUTO_CLOSE_INTERVAL_MS = 60 * 60 * 1000;
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 4100);
@@ -81,4 +83,10 @@ app.listen(PORT, () => {
   applyProductDefaults().catch((err) => {
     console.error('Failed to apply startup data defaults', err);
   });
+  // CM-034: auto-close overdue jobs hourly (also runs inside promoteAssignedJobsToActive at boot)
+  setInterval(() => {
+    autoCloseJobsPastEndDate().catch((err) => {
+      console.error('Scheduled auto-close failed', err);
+    });
+  }, AUTO_CLOSE_INTERVAL_MS).unref?.();
 });

@@ -3,7 +3,14 @@ import { prisma } from '../lib/prisma.js';
 import { certStatusFromExpiry } from '../lib/certStatus.js';
 import { recordAudit } from '../services/audit.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
-import { getInspectorForUser, isAdmin, isStaff } from '../services/authz.js';
+import {
+  assertCanAccessDepartment,
+  getInspectorForUser,
+  isAdmin,
+  isStaff,
+  staffInspectorDeptWhere,
+} from '../services/authz.js';
+import { sendRouteError } from '../lib/httpErrors.js';
 import { validateBody } from '../lib/validate.js';
 import {
   createClientSchema,
@@ -76,6 +83,7 @@ function crudRouter(model: 'client' | 'inspector' | 'department' | 'certificatio
         return;
       }
       const rows = await prisma.inspector.findMany({
+        where: staffInspectorDeptWhere(req.user!),
         include: { department: true, inspectorCerts: { include: { certification: true } } },
       });
       res.json(
@@ -278,6 +286,12 @@ function crudRouter(model: 'client' | 'inspector' | 'department' | 'certificatio
         res.status(400).json({ error: 'Department not found' });
         return;
       }
+      try {
+        assertCanAccessDepartment(req.user!, body.departmentId);
+      } catch (err) {
+        sendRouteError(res, err, 'Forbidden');
+        return;
+      }
 
       const clash = await prisma.inspector.findUnique({ where: { employeeNo: body.employeeNo } });
       if (clash) {
@@ -363,6 +377,14 @@ function crudRouter(model: 'client' | 'inspector' | 'department' | 'certificatio
       if (!inspector) {
         res.status(404).json({ error: 'Not found' });
         return;
+      }
+      if (isStaff(req.user!.role)) {
+        try {
+          assertCanAccessDepartment(req.user!, inspector.departmentId);
+        } catch (err) {
+          sendRouteError(res, err, 'Forbidden');
+          return;
+        }
       }
 
       const activeAssignments = inspector.assignments.filter((a) =>

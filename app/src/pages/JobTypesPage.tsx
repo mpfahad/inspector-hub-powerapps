@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type Certification, type JobType, type PriceChartData } from '../lib/api';
 import { CURRENCY_CODE, formatMoney } from '../lib/money';
+import { useAuth } from '../context/AuthContext';
 import { useDepartment } from '../context/DepartmentContext';
 
 type JobTypeForm = {
@@ -134,7 +135,9 @@ function JobTypeEditor({
 }
 
 export function JobTypesPage() {
+  const { user } = useAuth();
   const { department, loading: deptLoading } = useDepartment();
+  const canManage = ['Manager', 'Admin'].includes(user?.role ?? '');
   const [types, setTypes] = useState<JobType[]>([]);
   const [certs, setCerts] = useState<Certification[]>([]);
   const [chart, setChart] = useState<PriceChartData | null>(null);
@@ -316,22 +319,24 @@ export function JobTypesPage() {
             Categories and certifications for this department. Price chart on the right is scoped here.
           </p>
         </div>
-        <button
-          type="button"
-          className="btn-primary shrink-0"
-          onClick={() => {
-            cancelEdit();
-            setShowCreate((v) => !v);
-            setCreateError('');
-          }}
-        >
-          {showCreate ? 'Cancel' : '+ New job type'}
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            className="btn-primary shrink-0"
+            onClick={() => {
+              cancelEdit();
+              setShowCreate((v) => !v);
+              setCreateError('');
+            }}
+          >
+            {showCreate ? 'Cancel' : '+ New job type'}
+          </button>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.9fr)] gap-6 items-start">
         <div className="space-y-4 min-w-0">
-          {showCreate && (
+          {canManage && showCreate && (
             <div className="card p-5 space-y-3 border-teal/30">
               <h2 className="text-sm font-semibold text-navy">Add job type</h2>
               <JobTypeEditor
@@ -462,23 +467,25 @@ export function JobTypesPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2 shrink-0">
-                      <button
-                        type="button"
-                        className="btn-secondary text-xs"
-                        onClick={() => startEdit(type)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary text-xs text-red-700 border-red-200"
-                        disabled={deletingId === type.id}
-                        onClick={() => deleteType(type)}
-                      >
-                        {deletingId === type.id ? 'Deleting…' : 'Delete'}
-                      </button>
-                    </div>
+                    {canManage && (
+                      <div className="flex flex-col gap-2 shrink-0">
+                        <button
+                          type="button"
+                          className="btn-secondary text-xs"
+                          onClick={() => startEdit(type)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary text-xs text-red-700 border-red-200"
+                          disabled={deletingId === type.id}
+                          onClick={() => deleteType(type)}
+                        >
+                          {deletingId === type.id ? 'Deleting…' : 'Delete'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -496,6 +503,7 @@ export function JobTypesPage() {
               className="card p-5 space-y-4"
               onSubmit={async (e) => {
                 e.preventDefault();
+                if (!canManage) return;
                 setChartError('');
                 setSavingChart(true);
                 try {
@@ -526,6 +534,7 @@ export function JobTypesPage() {
                   className="input mt-1"
                   type="number"
                   min="0"
+                  disabled={!canManage}
                   value={globalPrice}
                   onChange={(e) => setGlobalPrice(e.target.value)}
                 />
@@ -550,6 +559,7 @@ export function JobTypesPage() {
                             className="input max-w-[110px] text-sm"
                             type="number"
                             min="0"
+                            disabled={!canManage}
                             value={typePrices[item.jobTypeId] ?? ''}
                             onChange={(e) =>
                               setTypePrices((p) => ({ ...p, [item.jobTypeId]: e.target.value }))
@@ -562,9 +572,11 @@ export function JobTypesPage() {
                 </table>
               </div>
               {chartError && <p className="text-sm text-red-600">{chartError}</p>}
-              <button type="submit" className="btn-primary w-full" disabled={savingChart}>
-                {savingChart ? 'Saving…' : 'Save price chart'}
-              </button>
+              {canManage && (
+                <button type="submit" className="btn-primary w-full" disabled={savingChart}>
+                  {savingChart ? 'Saving…' : 'Save price chart'}
+                </button>
+              )}
             </form>
           )}
         </aside>

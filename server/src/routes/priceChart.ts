@@ -1,11 +1,16 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
-import { STAFF_ROLES } from '../services/authz.js';
+import {
+  assertCanAccessDepartment,
+  MANAGER_ROLES,
+  STAFF_ROLES,
+} from '../services/authz.js';
 import { validateBody } from '../lib/validate.js';
 import { priceChartSchema } from '../lib/schemas.js';
 import { getPriceChart } from '../services/pricing.js';
 import { recordAudit } from '../services/audit.js';
+import { sendRouteError } from '../lib/httpErrors.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -13,10 +18,18 @@ router.use(requireRole(...STAFF_ROLES));
 
 router.get('/', async (req, res) => {
   const departmentId = req.query.departmentId ? Number(req.query.departmentId) : undefined;
+  if (Number.isFinite(departmentId)) {
+    try {
+      assertCanAccessDepartment(req.user!, departmentId as number);
+    } catch (err) {
+      sendRouteError(res, err, 'Forbidden');
+      return;
+    }
+  }
   res.json(await getPriceChart(Number.isFinite(departmentId) ? departmentId : undefined));
 });
 
-router.put('/', validateBody(priceChartSchema), async (req, res) => {
+router.put('/', requireRole(...MANAGER_ROLES), validateBody(priceChartSchema), async (req, res) => {
   const body = req.body as {
     globalDefaultUsd?: number;
     items?: { jobTypeId: number; priceUsd: number }[];

@@ -11,7 +11,13 @@ import {
 } from '../services/plannerService.js';
 import { STANDARD_DAY_HOURS } from '../services/plannerService.js';
 import { expiresOnCutoffForExpiring } from '../lib/certStatus.js';
-import { getInspectorForUser, STAFF_ROLES } from '../services/authz.js';
+import {
+  allowedDepartmentIds,
+  getInspectorForUser,
+  STAFF_ROLES,
+  staffDepartmentWhere,
+  staffInspectorDeptWhere,
+} from '../services/authz.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -21,19 +27,26 @@ const assignmentInclude = {
   inspector: true,
 };
 
-router.get('/kpis', requireRole(...STAFF_ROLES), async (_req, res) => {
+router.get('/kpis', requireRole(...STAFF_ROLES), async (req, res) => {
+  const jobScope = staffDepartmentWhere(req.user!);
+  const inspScope = staffInspectorDeptWhere(req.user!);
   const [openJobs, activeInspectors, activeJobs] = await Promise.all([
-    prisma.job.count({ where: { status: { notIn: ['Closed', 'Cancelled', 'Draft', 'Completed'] } } }),
-    prisma.inspector.count({ where: { status: 'Active' } }),
-    prisma.job.count({ where: { status: 'Active' } }),
+    prisma.job.count({
+      where: { status: { notIn: ['Closed', 'Cancelled', 'Draft', 'Completed'] }, ...jobScope },
+    }),
+    prisma.inspector.count({ where: { status: 'Active', ...inspScope } }),
+    prisma.job.count({ where: { status: 'Active', ...jobScope } }),
   ]);
   res.json({ openJobs, activeInspectors, activeJobs });
 });
 
-router.get('/operations', requireRole(...STAFF_ROLES), async (_req, res) => {
+router.get('/operations', requireRole(...STAFF_ROLES), async (req, res) => {
   const weekStart = mondayOfWeek(new Date());
   const dayDates = rangeDays(weekStart, 7);
   const isoDays = dayDates.map(isoDate);
+  const jobScope = staffDepartmentWhere(req.user!);
+  const inspScope = staffInspectorDeptWhere(req.user!);
+  const acl = allowedDepartmentIds(req.user!);
 
   const [
     openJobs,
@@ -47,32 +60,46 @@ router.get('/operations', requireRole(...STAFF_ROLES), async (_req, res) => {
     upcomingJobs,
     recentActivity,
   ] = await Promise.all([
-    prisma.job.count({ where: { status: { notIn: ['Closed', 'Cancelled', 'Draft', 'Completed'] } } }),
-    prisma.inspector.count({ where: { status: 'Active' } }),
-    prisma.job.count({ where: { status: 'Active' } }),
+    prisma.job.count({
+      where: { status: { notIn: ['Closed', 'Cancelled', 'Draft', 'Completed'] }, ...jobScope },
+    }),
+    prisma.inspector.count({ where: { status: 'Active', ...inspScope } }),
+    prisma.job.count({ where: { status: 'Active', ...jobScope } }),
     prisma.inspectorCert.count({
-      where: { expiresOn: { lte: expiresOnCutoffForExpiring() } },
+      where: {
+        expiresOn: { lte: expiresOnCutoffForExpiring() },
+        ...(acl ? { inspector: { departmentId: { in: acl } } } : {}),
+      },
     }),
     prisma.inspector.findMany({
-      where: { status: { not: 'Inactive' } },
+      where: { status: { not: 'Inactive' }, ...inspScope },
       include: { department: true },
     }),
     prisma.assignment.findMany({
       where: {
         status: { in: ['PendingAcceptance', 'Accepted', 'Active'] },
-        job: { status: { notIn: ['Cancelled', 'Closed', 'Completed'] } },
+        job: { status: { notIn: ['Cancelled', 'Closed', 'Completed'] }, ...jobScope },
       },
       include: { job: true },
     }),
-    prisma.leaveRequest.findMany({ where: { status: 'Approved' } }),
-    prisma.department.findMany({ orderBy: { name: 'asc' } }),
+    prisma.leaveRequest.findMany({
+      where: {
+        status: 'Approved',
+        ...(Object.keys(inspScope).length ? { inspector: inspScope } : {}),
+      },
+    }),
+    prisma.department.findMany({
+      where: acl ? { id: { in: acl } } : undefined,
+      orderBy: { name: 'asc' },
+    }),
     prisma.job.findMany({
-      where: { status: { in: ['Active', 'PendingAcceptance', 'Proposed'] } },
+      where: { status: { in: ['Active', 'PendingAcceptance', 'Proposed'] }, ...jobScope },
       include: { client: true, department: true, assignments: { where: { status: { notIn: ['Cancelled', 'Rejected'] } } } },
       orderBy: { startDate: 'asc' },
       take: 6,
     }),
     prisma.activityLog.findMany({
+      where: Object.keys(jobScope).length ? { job: jobScope } : undefined,
       include: { inspector: true, job: { include: { client: true } } },
       orderBy: { logDate: 'desc' },
       take: 8,

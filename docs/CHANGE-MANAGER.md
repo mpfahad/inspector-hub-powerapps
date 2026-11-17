@@ -63,6 +63,7 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 | CM-034 | 2026-11-17 | **P0/P1 UAT hardening:** enforce `departmentIds` ACL on staff data APIs; hourly auto-close past end date; Manager vs Coordinator AuthZ (leave approve / job types / price chart); editable job `autoCompleteOnEndDate` + `rateBasis`; Prisma migrations baseline + live entrypoint; seed-off docs; keep Inspector login purge. | Stakeholder | Implemented | 2026-11-17: `authz` helpers (`allowedDepartmentIds`, `assertCanAccessJob/Department`, `MANAGER_ROLES`); jobs/planner/leave/reports/timesheets/dashboard/map/competency ACL; JobDetail toggles; `migrate deploy` (+ db push fallback) in `docker-entrypoint.sh`; `docs/DOCKER-LIVE.md` seed warnings. NDT/Rope roster import deferred pending data. |
 | CM-035 | 2026-11-17 | Dept dashboard (not cross-dept home KPIs); planner half-day = blue bar half-width only; Coordinators edit job types; remove price-chart sidebar/global default; activity logs refresh Schedule hours; rate prefills from job type; edit qualifications + competency matrix cells. | Stakeholder | Implemented | 2026-11-17: home = dept picker; `/d/:code` dashboard; price via job type only; qual PUT; competency cell modal; `onChanged` → job progress. |
 | CM-036 | 2026-11-17 | Job type **day rate / hour rate / default hours** (any two → third); day jobs use day rate, hourly use hour rate+hours; **auto activity logs** on assign/Active (edit still allowed); employee **CTC only Admin**; no cost on job complete; qual delete; drop competency Dept column. | Stakeholder | Implemented | 2026-11-17: `JobType.dayRateUsd/hourRateUsd/defaultHours`; `ensureAutoActivityLogs`; cost redaction; catalog DELETE. |
+| CM-037 | 2026-11-17 | New job **Est. hours** prefilled from job type **default hours × calendar days × inspectors** (was hardcoded 40). Still editable. | Stakeholder | Implemented | 2026-11-17: `JobNewPage` uses `defaultHours` + `inclusiveDays`; hint under field. |
 
 ---
 
@@ -75,4 +76,4 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 
 ---
 
-*Last updated: 2026-11-17 (CM-036 rates + auto activity)*
+*Last updated: 2026-11-17 (CM-037 est hours from job type)*

@@ -13,9 +13,27 @@ import { statusLabel } from '../lib/jobs';
 import {
   emptyTeamSlots,
   filledTeamSlots,
+  inclusiveDays,
   TeamSlotsEditor,
   type TeamSlot,
 } from '../components/jobs/TeamSlotsEditor';
+
+function hoursPerDay(type?: JobType | null): number {
+  const h = type?.defaultHours;
+  return h != null && Number.isFinite(h) && h > 0 ? h : 8;
+}
+
+/** Job-type default hours × inclusive calendar days × inspectors needed. */
+function suggestEstimatedHours(
+  type: JobType | null | undefined,
+  startDate: string,
+  endDate: string,
+  teamSize: number
+): string {
+  const days = inclusiveDays(startDate, endDate);
+  const total = hoursPerDay(type) * Math.max(1, days || 1) * Math.max(1, teamSize);
+  return String(Math.round(total * 100) / 100);
+}
 
 type AssignMode = 'later' | 'now';
 type AssignmentShape = 'single' | 'team';
@@ -75,7 +93,7 @@ export function JobNewPage() {
     startDate: '',
     endDate: '',
     priority: 'Normal',
-    estimatedHours: '40',
+    estimatedHours: '8',
     requiredInspectorCount: '1',
     certificationIds: [] as number[],
     requiresQeApproval: false,
@@ -148,6 +166,14 @@ export function JobNewPage() {
       return prev.slice(0, teamSize);
     });
   }, [assignMode, teamSize, form.startDate, form.endDate]);
+
+  // Prefill Est. hours from job type defaultHours × days × team size (still editable).
+  useEffect(() => {
+    const type = jobTypes.find((t) => String(t.id) === form.jobTypeId);
+    if (!type && !form.startDate && !form.endDate) return;
+    const next = suggestEstimatedHours(type, form.startDate, form.endDate, teamSize);
+    setForm((f) => (f.estimatedHours === next ? f : { ...f, estimatedHours: next }));
+  }, [jobTypes, form.jobTypeId, form.startDate, form.endDate, teamSize]);
 
   useEffect(() => {
     if (!department) return;
@@ -482,15 +508,24 @@ export function JobNewPage() {
             />
           </div>
           <div>
-            <label className="text-xs font-medium">
-              {rateBasis === 'hourly' ? 'Est. hours' : 'Est. hours'}
-            </label>
+            <label className="text-xs font-medium">Est. hours</label>
             <input
               type="number"
               className="input mt-1"
               value={form.estimatedHours}
               onChange={(e) => setForm({ ...form, estimatedHours: e.target.value })}
             />
+            {selectedType && (
+              <p className="text-[11px] text-slate-400 mt-1">
+                From job type: {hoursPerDay(selectedType)}h
+                {form.startDate && form.endDate
+                  ? ` × ${Math.max(1, inclusiveDays(form.startDate, form.endDate))} day${
+                      inclusiveDays(form.startDate, form.endDate) === 1 ? '' : 's'
+                    }`
+                  : ''}
+                {teamSize > 1 ? ` × ${teamSize} inspectors` : ''} (editable)
+              </p>
+            )}
           </div>
         </div>
 

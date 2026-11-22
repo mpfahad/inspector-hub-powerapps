@@ -12,7 +12,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:import-roster": "tsx prisma/import-roster.ts",
     "db:import-rigs": "tsx prisma/import-rigs-roster.ts",
-    "db:import-ndt": "tsx prisma/import-ndt.ts",
+    "db:import-ndt": "node ./node_modules/tsx/dist/cli.mjs prisma/import-ndt.ts",
     "db:backfill-jobtype-depts": "tsx prisma/backfill-jobtype-departments.ts",
     "db:seed-sample-jobs": "tsx prisma/seed-sample-jobs.ts",
     "db:purge-inspector-logins": "tsx scripts/purge-inspector-logins.ts",
@@ -28,6 +28,7 @@
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.2",
     "pdfkit": "^0.17.1",
+    "tsx": "^4.20.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -39,7 +40,6 @@
     "@types/node": "^22.16.5",
     "@types/pdfkit": "^0.17.2",
     "prisma": "^6.19.0",
-    "tsx": "^4.20.5",
     "typescript": "^5.8.3"
   }
 }

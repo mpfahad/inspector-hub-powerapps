@@ -18,9 +18,9 @@ ENV PORT=4100
 
 COPY package*.json ./
 COPY prisma ./prisma
-# Prod deps + Prisma CLI (db push) + tsx (optional seed profile)
+# Prod deps include tsx (import/seed scripts). Prisma CLI added for migrate/db push.
 RUN npm ci --omit=dev \
-  && npm install prisma@6.19.3 tsx@4.20.5 --no-save --omit=dev \
+  && npm install prisma@6.19.3 --no-save \
   && npx prisma generate
 
 COPY --from=builder /app/dist ./dist

@@ -181,32 +181,17 @@ function StaffJobsBoard() {
     return (
       <div className="space-y-4">
         <div className="h-20 rounded-xl bg-slate-100 animate-pulse" />
-        <div className="h-[360px] rounded-xl bg-slate-100 animate-pulse" />
         <div className="flex gap-4">
           {[1, 2, 3].map((n) => (
             <div key={n} className="h-96 w-[280px] rounded-xl bg-slate-100 animate-pulse shrink-0" />
           ))}
         </div>
+        <div className="h-[360px] rounded-xl bg-slate-100 animate-pulse" />
       </div>
     );
   }
 
   const counts = scopedCounts;
-
-  const mapPanel = (
-    <JobsMapPanel
-      data={mapData}
-      error={mapError}
-      filter={filter}
-      onFilterChange={setFilter}
-      compact
-      fillHeight
-      showPopout
-      departmentId={department?.id}
-      deptCode={department?.code}
-      className="h-full"
-    />
-  );
 
   return (
     <div className="space-y-6">
@@ -230,72 +215,77 @@ function StaffJobsBoard() {
         ))}
       </div>
 
-      {/* Below xl: map stacks above board. xl+: board left, sticky map right. */}
-      <div className="flex flex-col xl:grid xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-4 xl:items-start">
-        <div className="order-1 xl:order-2 xl:sticky xl:top-4 xl:h-[calc(100vh-6rem)] mb-4 xl:mb-0 min-h-[360px] xl:min-h-0">
-          {mapPanel}
-        </div>
-
-        <div className="order-2 xl:order-1 space-y-4 min-w-0">
-          <div className="card p-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-            <input
-              type="search"
-              className="input max-w-md"
-              placeholder="Search ref, title, client, inspector…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <div className="flex gap-2 shrink-0">
-              <div className="inline-flex rounded-lg border border-slate-200 p-1 bg-slate-50">
-                <button
-                  type="button"
-                  className={`px-3 py-1.5 text-sm rounded-md ${view === 'board' ? 'bg-white shadow-sm font-medium text-navy' : 'text-slate-500'}`}
-                  onClick={() => setView('board')}
-                >
-                  Board
-                </button>
-                <button
-                  type="button"
-                  className={`px-3 py-1.5 text-sm rounded-md ${view === 'list' ? 'bg-white shadow-sm font-medium text-navy' : 'text-slate-500'}`}
-                  onClick={() => setView('list')}
-                >
-                  List
-                </button>
-              </div>
+      <div className="space-y-4 min-w-0">
+        <div className="card p-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+          <input
+            type="search"
+            className="input max-w-md"
+            placeholder="Search ref, title, client, inspector…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="flex gap-2 shrink-0">
+            <div className="inline-flex rounded-lg border border-slate-200 p-1 bg-slate-50">
+              <button
+                type="button"
+                className={`px-3 py-1.5 text-sm rounded-md ${view === 'board' ? 'bg-white shadow-sm font-medium text-navy' : 'text-slate-500'}`}
+                onClick={() => setView('board')}
+              >
+                Board
+              </button>
+              <button
+                type="button"
+                className={`px-3 py-1.5 text-sm rounded-md ${view === 'list' ? 'bg-white shadow-sm font-medium text-navy' : 'text-slate-500'}`}
+                onClick={() => setView('list')}
+              >
+                List
+              </button>
             </div>
           </div>
-
-          {view === 'board' ? (
-            <div className="flex gap-4 overflow-x-auto pb-4 -mx-1 px-1">
-              {JOB_STAGES.map((stage) => (
-                <BoardColumn
-                  key={stage.id}
-                  stage={stage}
-                  jobs={filter === 'all' || filter === stage.id ? jobsByColumn[stage.id] : []}
-                  onAssign={setAssignJob}
-                  onReassign={setAssignJob}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="card overflow-hidden">
-              <div className="hidden md:grid grid-cols-[minmax(100px,1fr)_2fr_1fr_1fr_1fr_auto] gap-4 px-4 py-3 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500 border-b border-slate-200">
-                <span>Ref</span>
-                <span>Job</span>
-                <span>Type</span>
-                <span>Inspector</span>
-                <span>Dates</span>
-                <span>Status</span>
-              </div>
-              {filteredJobs.length === 0 ? (
-                <p className="text-sm text-slate-500 p-8 text-center">No jobs match your filters.</p>
-              ) : (
-                filteredJobs.map((j) => <JobListRow key={j.id} job={j} />)
-              )}
-            </div>
-          )}
         </div>
+
+        {view === 'board' ? (
+          <div className="flex gap-4 overflow-x-auto pb-4 -mx-1 px-1">
+            {JOB_STAGES.map((stage) => (
+              <BoardColumn
+                key={stage.id}
+                stage={stage}
+                jobs={filter === 'all' || filter === stage.id ? jobsByColumn[stage.id] : []}
+                onAssign={setAssignJob}
+                onReassign={setAssignJob}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="card overflow-hidden">
+            <div className="hidden md:grid grid-cols-[minmax(100px,1fr)_2fr_1fr_1fr_1fr_auto] gap-4 px-4 py-3 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500 border-b border-slate-200">
+              <span>Ref</span>
+              <span>Job</span>
+              <span>Type</span>
+              <span>Inspector</span>
+              <span>Dates</span>
+              <span>Status</span>
+            </div>
+            {filteredJobs.length === 0 ? (
+              <p className="text-sm text-slate-500 p-8 text-center">No jobs match your filters.</p>
+            ) : (
+              filteredJobs.map((j) => <JobListRow key={j.id} job={j} />)
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Map sits below board, above timesheets */}
+      <JobsMapPanel
+        data={mapData}
+        error={mapError}
+        filter={filter}
+        onFilterChange={setFilter}
+        compact
+        showPopout
+        departmentId={department?.id}
+        deptCode={department?.code}
+      />
 
       <section id="timesheet" className="pt-2 border-t border-slate-200">
         <TimesheetGenerator compact showHistory />

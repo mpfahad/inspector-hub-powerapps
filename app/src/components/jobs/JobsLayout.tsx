@@ -58,7 +58,7 @@ export function JobsLayout() {
                 Jobs{dept?.department ? ` · ${dept.department.name}` : ''}
               </h1>
               <p className="text-sm text-slate-500 mt-1">
-                Map, board, and list — filter New / Active / Completed to see where work sits
+                Board, map, and timesheets — filter New / Active / Completed to see where work sits
               </p>
             </div>
             <Link to={`${jobsBase}/new`} className="btn-primary shrink-0">

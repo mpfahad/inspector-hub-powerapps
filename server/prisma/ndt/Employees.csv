@@ -1,0 +1,86 @@
+﻿Employee_No,Full_Name,Department_Code,Email,Job_Title,Status,QE_Approved,Highest_Qualification,Base_Location,Hire_Date,Cert_Code,Cert_Name,Cert_Issuer,Cert_Issued_On,Cert_Expires_On
+E0910,Harilal Haridasan,TPI,harilal.haridasan@applus.com,Deputy Manager - TPI,Active,Yes,Bachelor of Engineering - Mechanical Engineering / MTech Certificate Quality Management ,Doha,,,CSWIP 3.2.2,,,03-May-26
+,,,,,,,,,,,"ISO Lead Auditor
+(9001:2015)",,,No Expiry
+,,,,,,,,,,,MMUP,,,03-Jun-29
+,,,,,,,,,,,LPT Level III,,,01-Feb-27
+,,,,,,,,,,,MPT Level III,,,01-Jan-28
+,,,,,,,,,,,UT Level III,,,01-Jan-27
+,,,,,,,,,,,RT Level III,,,01-Apr-27
+,,,,,,,,,,,VT Level II,,,01-May-27
+,,,,,,,,,,,API 570,,,31-Oct-27
+,,,,,,,,,,,API 653,,,31-May-28
+,,,,,,,,,,,API 510,,,31-Jul-27
+,,,,,,,,,,,NACE Level II,,,31-Dec-27
+E1247,Shaji Francis Chirayaththarayil,TPI,shaji.francis@applus.com,Sr. Inspection Engineer - Mechanical,Active,Yes,Diploma in Mechanical Engineering,Doha,,,CSWIP 3.2.1,,,08-Nov-28
+,,,,,,,,,,,CSWIP 3.2.2,,,08-Nov-28
+,,,,,,,,,,,"ISO Lead Auditor
+(9001:2015)",,,No Expiry
+,,,,,,,,,,,LPT Level II,,,15-Dec-27
+,,,,,,,,,,,MPT Level II,,,15-Dec-27
+,,,,,,,,,,,UT Level II,,,15-Dec-27
+,,,,,,,,,,,RT Level II,,,15-Dec-27
+,,,,,,,,,,,API 653,,,30-Nov-26
+,,,,,,,,,,,IRATA,,,29-Apr-29
+E3654,Prabu Ellappan,TPI,Prabu.Ellappan@applus.com ,Inspection Engineer - Mechanical,Active,Yes,Bachelor of Technology in Mechanical Engineering,Doha,,,CSWIP 3.2.2,,,30-Dec-26
+,,,,,,,,,,,"ISO Lead Auditor
+(9001:2015)",,,No Expiry
+,,,,,,,,,,,LPT Level II,,,09-Nov-28
+,,,,,,,,,,,MPT Level II,,,09-Nov-28
+,,,,,,,,,,,UT Level II,,,09-Nov-28
+,,,,,,,,,,,RT Level II,,,09-Nov-28
+,,,,,,,,,,,RT Film Level II,,,09-Nov-28
+,,,,,,,,,,,API 570,,,30-Apr-28
+,,,,,,,,,,,API 653,,,31-Jan-29
+,,,,,,,,,,,API 510,,,30-Nov-27
+,,,,,,,,,,,BGAS- CSWIP Grade II,,,08-Aug-29
+E0801,Shivakumara Danappa,TPI,Shiva.Danappa@applus.com,Sr. Inspection Engineer - Mechanical,Active,Yes,Bachelor of Engineering - Mechanical Engineering,Doha,,,CSWIP 3.2.2,,,08-Dec-27
+,,,,,,,,,,,LPT Level II,,,02-Nov-28
+,,,,,,,,,,,MPT Level II,,,02-Nov-28
+,,,,,,,,,,,UT Level II,,,02-Nov-28
+,,,,,,,,,,,RT Level II,,,02-Nov-28
+E4387,Madhu Bhukya,TPI,Madhu.Bhukya@applus.com,Sr. Inspection Engineer - Electrical,Active,Yes,Bachelor of Technology - Electrical & Electronics Engineering ,Doha,,,CompEX (ATEX),,,29-Aug-28
+,,,,,,,,,,,"ISO Lead Auditor
+(9001:2015)",,,No Expiry
+E3278,Khaja Nazurudeen Hanifa,TPI,Khaja.Hanifa@applus.com,Inspection Engineer - Electrical,Active,Yes,Bachelor of Technology - Electronics and Communication Engineering ,Doha,,,CompEX (ATEX),,,04-Feb-29
+E4526,Berbin Jose,TPI,berbin.jose@applus.com,Inspection Engineer - Mechanical,Active,No,Bachelor of Engineering - Mechanical Engineering,Doha,,,CSWIP 3.2.2,,,29-Dec-26
+,,,,,,,,,,,"ISO Lead Auditor
+(9001:2015)",,,No Expiry
+,,,,,,,,,,,LPT Level III,,,30-Sep-28
+,,,,,,,,,,,MPT Level III,,,01-Jul-27
+,,,,,,,,,,,UT Level III,,,01-Nov-27
+,,,,,,,,,,,RT Level III,,,01-Jul-28
+,,,,,,,,,,,BGAS- CSWIP Grade II,,,09-Mar-28
+E4845,Arvind Duraiswamy,TPI,arvind.duraiswamy@applus.com,Sr. Inspection Engineer - Mechanical,Active,Yes,Bachelor of Engineering - Mechanical Engineering,Doha,,,CSWIP 3.2.2,,,20-Apr-28
+,,,,,,,,,,,"ISO Lead Auditor
+(9001:2015)",,,No Expiry
+,,,,,,,,,,,LPT Level II,,,13-Sep-28
+,,,,,,,,,,,MPT Level II,,,13-Sep-28
+,,,,,,,,,,,UT Level II,,,13-Sep-28
+,,,,,,,,,,,RT Level II,,,13-Sep-28
+,,,,,,,,,,,RT Film Level II,,,13-Sep-28
+,,,,,,,,,,,BGAS- CSWIP Grade II,,,11-Jul-29
+E4805,Narayanan Muthuraman,TPI,narayanan.m@applus.com,Sr. Inspection Engineer - Mechanical,Active,No,Bachelor of Technology in Mechanical Engineering,Doha,,,CSWIP 3.2.2,,,16-Oct-28
+,,,,,,,,,,,"ISO Lead Auditor
+(9001:2015)",,,No Expiry
+,,,,,,,,,,,LPT Level II,,,10-Aug-28
+,,,,,,,,,,,MPT Level II,,,10-Aug-28
+,,,,,,,,,,,UT Level II,,,10-Aug-28
+,,,,,,,,,,,RT Level II,,,10-Aug-28
+,,,,,,,,,,,RT Film Level II,,,10-Aug-28
+,,,,,,,,,,,API 570,,,31-Aug-28
+,,,,,,,,,,,API 653,,,31-Jan-29
+,,,,,,,,,,,API 510,,,30-Nov-28
+,,,,,,,,,,,BGAS- CSWIP Grade II,,,28-Jul-29
+C1829,John Paul,TPI,John.Paul@e.applus.com,Painting / Welding Inspector,Active,No,Bachelor of Engineering - Mechanical Engineering,Doha,,,MMUP,,,08-Nov-28
+,,,,,,,,,,,"ISO Lead Auditor
+(9001:2015)",,,No Expiry
+,,,,,,,,,,,CSWIP 3.2.2,,,28-Jan-31
+,,,,,,,,,,,LPT Level II,,,26-Apr-25
+,,,,,,,,,,,MPT Level II,,,26-Apr-25
+,,,,,,,,,,,UT Level II,,,16-Apr-25
+,,,,,,,,,,,RT Level II,,,06-Apr-25
+,,,,,,,,,,,API 570,,,31-Aug-27
+,,,,,,,,,,,API 653,,,30-Jun-27
+,,,,,,,,,,,API 510,,,30-Nov-26
+,,,,,,,,,,,BGAS- CSWIP Grade I,,,31-Jul-27

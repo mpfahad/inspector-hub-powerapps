@@ -101,6 +101,16 @@ docker compose up -d --build
 # volume inspection-hub-data is preserved; entrypoint runs migrate deploy (db push fallback)
 ```
 
+### NDT roster / job types (CM-041)
+
+After pull + rebuild, load NDT employees/job types (CSVs under `server/prisma/ndt/`, same as `docs/NDT`):
+
+```bash
+docker compose exec api npx tsx prisma/import-ndt.ts
+```
+
+Local (dev DB): `npm run db:import-ndt` from `server/`.
+
 If migrate deploy fails on an older volume that was created with `db push` only, the entrypoint falls back to `db push`. To baseline cleanly once: `npx prisma migrate resolve --applied 20261117120000_init` inside the API container, then restart.
 
 ---

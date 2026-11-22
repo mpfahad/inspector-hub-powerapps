@@ -67,6 +67,7 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 | CM-038 | 2026-11-17 | **Hourly rate** on assign/new-job slots prefilled from job type (derive hour = day ÷ default hours when hour rate missing). | Stakeholder | Implemented | 2026-11-17: client `jobTypeRates.rateForJobBasis`; TeamSlots / Assign modal / New job. |
 | CM-039 | 2026-11-22 | Edit job: **Price** editable (Draft/Proposed/Active/PendingAcceptance); label **Agreed price → Price**. | Stakeholder | Implemented | 2026-11-22: JobEditPanel price field; soft update allows `agreedPriceUsd`; detail/complete labels renamed. |
 | CM-040 | 2026-11-22 | Jobs page: **map below board**, above timesheet generation (was side/top of board). | Stakeholder | Implemented | 2026-11-22: `JobsPage` vertical stack board → map → timesheet. |
+| CM-041 | 2026-11-22 | **NDT Inspection** intake: import employees + certs + job types from `docs/NDT/*.csv` (TPI sheet → NDT dept). | Stakeholder | Implemented | 2026-11-22: `npm run db:import-ndt`; 10 employees, NDT job types + required certs; Level III also grants L2 codes. |
 
 ---
 
@@ -79,4 +80,4 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 
 ---
 
-*Last updated: 2026-11-22 (CM-040 map below board)*
+*Last updated: 2026-11-22 (CM-041 NDT import)*

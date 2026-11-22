@@ -1,0 +1,12 @@
+﻿Department_Code,Job_Type_Code,Job_Type_Name,Description,Default_Price_QAR,Active,Required_Cert_Code,Required_Cert_Name,Mandatory
+NDT,NDT-UT,UT Thickness / Flaw Survey,Conventional ultrasonic,2800,Yes,NDT-UT-L2,Ultrasonic Testing Level II,Yes
+NDT,NDT-PAUT,PAUT / TOFD Survey,Phased array and/or TOFD,4500,Yes,NDT-PAUT-L2,Phased Array UT Level II,Yes
+NDT,NDT-PAUT,PAUT / TOFD Survey,Phased array and/or TOFD,4500,Yes,NDT-UT-L2,Ultrasonic Testing Level II,Yes
+NDT,NDT-MT,Magnetic Particle Inspection,MT surface inspection,1800,Yes,NDT-MT-L2,Magnetic Particle Level II,Yes
+NDT,NDT-PT,Liquid Penetrant Inspection,PT surface inspection,1600,Yes,NDT-PT-L2,Penetrant Testing Level II,Yes
+NDT,NDT-RT,Radiographic Inspection,RT film or digital,5200,Yes,NDT-RT-L2,Radiographic Testing Level II,Yes
+NDT,NDT-RA-UT,Rope Access UT,UT via rope access,3800,Yes,NDT-UT-L2,Ultrasonic Testing Level II,Yes
+NDT,NDT-RA-UT,Rope Access UT,UT via rope access,3800,Yes,IRATA-L1,IRATA Rope Access Level 1,Yes
+NDT,NDT-RA-MULTI,Rope Access Multi-NDT,Multi-method via rope,5200,Yes,NDT-UT-L2,Ultrasonic Testing Level II,Yes
+NDT,NDT-RA-MULTI,Rope Access Multi-NDT,Multi-method via rope,5200,Yes,IRATA-L2,IRATA Rope Access Level 2,Yes
+RIGS,RA-TECH,Rope Access Technician Scope,Rope access support,2200,Yes,IRATA-L1,IRATA Rope Access Level 1,Yes

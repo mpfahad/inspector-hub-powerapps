@@ -65,6 +65,7 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 | CM-036 | 2026-11-17 | Job type **day rate / hour rate / default hours** (any two → third); day jobs use day rate, hourly use hour rate+hours; **auto activity logs** on assign/Active (edit still allowed); employee **CTC only Admin**; no cost on job complete; qual delete; drop competency Dept column. | Stakeholder | Implemented | 2026-11-17: `JobType.dayRateUsd/hourRateUsd/defaultHours`; `ensureAutoActivityLogs`; cost redaction; catalog DELETE. |
 | CM-037 | 2026-11-17 | New job **Est. hours** prefilled from job type **default hours × calendar days × inspectors** (was hardcoded 40). Still editable. | Stakeholder | Implemented | 2026-11-17: `JobNewPage` uses `defaultHours` + `inclusiveDays`; hint under field. |
 | CM-038 | 2026-11-17 | **Hourly rate** on assign/new-job slots prefilled from job type (derive hour = day ÷ default hours when hour rate missing). | Stakeholder | Implemented | 2026-11-17: client `jobTypeRates.rateForJobBasis`; TeamSlots / Assign modal / New job. |
+| CM-039 | 2026-11-22 | Edit job: **Price** editable (Draft/Proposed/Active/PendingAcceptance); label **Agreed price → Price**. | Stakeholder | Implemented | 2026-11-22: JobEditPanel price field; soft update allows `agreedPriceUsd`; detail/complete labels renamed. |
 
 ---
 
@@ -77,4 +78,4 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 
 ---
 
-*Last updated: 2026-11-17 (CM-038 hourly rate prefill)*
+*Last updated: 2026-11-22 (CM-039 editable job price)*

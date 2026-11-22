@@ -303,7 +303,7 @@ export function JobDetailPage() {
             </dd>
           </div>
           <div>
-            <dt className="text-slate-500">Agreed price (QAR)</dt>
+            <dt className="text-slate-500">Price (QAR)</dt>
             <dd className="font-medium">
               {job.agreedPriceUsd != null
                 ? formatMoney(job.agreedPriceUsd)
@@ -438,7 +438,7 @@ export function JobDetailPage() {
               />
             </div>
             <div>
-              <label className="text-xs">Agreed job price (QAR)</label>
+              <label className="text-xs">Price (QAR)</label>
               <input
                 className="input mt-1 max-w-xs"
                 type="number"
@@ -500,7 +500,7 @@ export function JobDetailPage() {
           )}
           {job.closingComments && <p className="text-sm text-slate-500">{job.closingComments}</p>}
           {job.agreedPriceUsd != null && (
-            <p className="text-sm text-slate-600">Agreed price: {formatMoney(job.agreedPriceUsd)}</p>
+            <p className="text-sm text-slate-600">Price: {formatMoney(job.agreedPriceUsd)}</p>
           )}
         </div>
       )}

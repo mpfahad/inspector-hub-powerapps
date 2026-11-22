@@ -399,7 +399,7 @@ router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobSchema), a
   const body = req.body as Record<string, unknown>;
 
   if (softEdit && !fullEdit) {
-    const hardKeys = ['clientId', 'departmentId', 'jobTypeId', 'agreedPriceUsd', 'requiresQeApproval'];
+    const hardKeys = ['clientId', 'departmentId', 'jobTypeId', 'requiresQeApproval'];
     for (const key of hardKeys) {
       if (body[key] !== undefined) {
         res.status(400).json({ error: `Cannot change ${key} while job is ${existing.status}` });
@@ -447,6 +447,7 @@ router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobSchema), a
       body.autoCompleteOnEndDate !== undefined ? Boolean(body.autoCompleteOnEndDate) : undefined,
     rateBasis:
       body.rateBasis !== undefined ? (body.rateBasis === 'hourly' ? 'hourly' : 'day') : undefined,
+    agreedPriceUsd: body.agreedPriceUsd !== undefined ? (body.agreedPriceUsd as number | null) : undefined,
   };
 
   const fullData = {
@@ -456,7 +457,6 @@ router.put('/:id', requireRole(...STAFF_ROLES), validateBody(updateJobSchema), a
     departmentId: body.departmentId !== undefined ? Number(body.departmentId) : undefined,
     jobTypeId: body.jobTypeId !== undefined ? (body.jobTypeId ? Number(body.jobTypeId) : null) : undefined,
     requiresQeApproval: body.requiresQeApproval !== undefined ? Boolean(body.requiresQeApproval) : undefined,
-    agreedPriceUsd: body.agreedPriceUsd !== undefined ? (body.agreedPriceUsd as number | null) : undefined,
   };
 
   const job = await prisma.job.update({

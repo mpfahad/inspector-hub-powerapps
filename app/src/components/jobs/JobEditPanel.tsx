@@ -11,6 +11,12 @@ type Props = {
   onSaved: () => void;
 };
 
+function priceSeed(job: JobDetail): string {
+  if (job.agreedPriceUsd != null) return String(job.agreedPriceUsd);
+  if (job.suggestedPriceUsd != null) return String(job.suggestedPriceUsd);
+  return '';
+}
+
 export function JobEditPanel({ job, clients, departments, onSaved }: Props) {
   const fullEdit = FULL_EDIT.includes(job.status);
   const softEdit = SOFT_EDIT.includes(job.status);
@@ -23,6 +29,7 @@ export function JobEditPanel({ job, clients, departments, onSaved }: Props) {
     endDate: job.endDate.slice(0, 10),
     priority: job.priority,
     estimatedHours: String(job.estimatedHours),
+    agreedPriceUsd: priceSeed(job),
     clientId: String(job.client.id),
     departmentId: String(job.department.id),
     requiresQeApproval: Boolean(job.requiresQeApproval),
@@ -39,6 +46,7 @@ export function JobEditPanel({ job, clients, departments, onSaved }: Props) {
       endDate: job.endDate.slice(0, 10),
       priority: job.priority,
       estimatedHours: String(job.estimatedHours),
+      agreedPriceUsd: priceSeed(job),
       clientId: String(job.client.id),
       departmentId: String(job.department.id),
       requiresQeApproval: Boolean(job.requiresQeApproval),
@@ -47,10 +55,19 @@ export function JobEditPanel({ job, clients, departments, onSaved }: Props) {
 
   if (!fullEdit && !softEdit) return null;
 
+  const parsedPrice = (): number | null => {
+    const raw = form.agreedPriceUsd.trim();
+    if (raw === '') return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) throw new Error('Price must be a non-negative number');
+    return n;
+  };
+
   const save = async () => {
     setSaving(true);
     setError('');
     try {
+      const agreedPriceUsd = parsedPrice();
       if (fullEdit) {
         await api.updateJob(job.id, {
           title: form.title,
@@ -63,6 +80,7 @@ export function JobEditPanel({ job, clients, departments, onSaved }: Props) {
           clientId: Number(form.clientId),
           departmentId: Number(form.departmentId),
           requiresQeApproval: form.requiresQeApproval,
+          agreedPriceUsd,
         });
       } else {
         await api.updateJob(job.id, {
@@ -72,6 +90,7 @@ export function JobEditPanel({ job, clients, departments, onSaved }: Props) {
           endDate: form.endDate,
           priority: form.priority,
           estimatedHours: Number(form.estimatedHours),
+          agreedPriceUsd,
         });
       }
       setOpen(false);
@@ -98,7 +117,7 @@ export function JobEditPanel({ job, clients, departments, onSaved }: Props) {
           <h2 className="font-semibold text-navy">Edit job</h2>
           {softEdit && !fullEdit && (
             <p className="text-xs text-slate-500 mt-0.5">
-              Active job — soft fields only (client, department, start date, and price stay locked).
+              Active job — soft fields only (client, department, and start date stay locked).
             </p>
           )}
         </div>
@@ -189,6 +208,18 @@ export function JobEditPanel({ job, clients, departments, onSaved }: Props) {
             className="input mt-1"
             value={form.estimatedHours}
             onChange={(e) => setForm({ ...form, estimatedHours: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-slate-500">Price (QAR)</label>
+          <input
+            className="input mt-1"
+            type="number"
+            min="0"
+            step="1"
+            value={form.agreedPriceUsd}
+            onChange={(e) => setForm({ ...form, agreedPriceUsd: e.target.value })}
+            placeholder="Job price"
           />
         </div>
         <div className="sm:col-span-2">

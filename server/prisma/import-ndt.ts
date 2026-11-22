@@ -8,9 +8,40 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient, InspectorStatus, CertStatus } from '@prisma/client';
-import { syncJobTypeRates } from '../src/services/jobTypeRates.js';
 
 const prisma = new PrismaClient();
+
+/** Inline copy of jobTypeRates.syncJobTypeRates — works in Docker (no /app/src). */
+function syncJobTypeRates(input: {
+  dayRateUsd?: number | null;
+  hourRateUsd?: number | null;
+  defaultHours?: number | null;
+  defaultPriceUsd?: number | null;
+}) {
+  const pos = (n: unknown) => {
+    const v = typeof n === 'number' ? n : Number(n);
+    return Number.isFinite(v) && v >= 0 ? v : null;
+  };
+  let day = pos(input.dayRateUsd ?? input.defaultPriceUsd);
+  let hour = pos(input.hourRateUsd);
+  let hours = pos(input.defaultHours);
+  const hasDay = day != null && day > 0;
+  const hasHour = hour != null && hour > 0;
+  const hasHours = hours != null && hours > 0;
+  if (hasDay && hasHours && !hasHour) hour = Math.round((day! / hours!) * 100) / 100;
+  else if (hasHour && hasHours && !hasDay) day = Math.round(hour! * hours! * 100) / 100;
+  else if (hasDay && hasHour && !hasHours) hours = hour! > 0 ? Math.round((day! / hour!) * 10) / 10 : null;
+  else if (hasDay && !hasHours && !hasHour) {
+    hours = 8;
+    hour = Math.round((day! / 8) * 100) / 100;
+  }
+  return {
+    dayRateUsd: day,
+    hourRateUsd: hour,
+    defaultHours: hours,
+    defaultPriceUsd: day,
+  };
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** Prefer prisma/ndt (shipped in Docker image); fall back to docs/NDT. */

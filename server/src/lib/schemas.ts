@@ -8,6 +8,7 @@ export const loginSchema = z.object({
 });
 
 const optionalUsd = z.coerce.number().finite().nonnegative().max(1_000_000).optional().nullable();
+const optionalHours = z.coerce.number().finite().nonnegative().max(24).optional().nullable();
 const dateYmd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD');
 
 export const teamSlotSchema = z.object({
@@ -192,6 +193,62 @@ export const createInspectorSchema = z.object({
   status: z.enum(['Active', 'OnLeave', 'Training', 'Inactive']).optional(),
 });
 
+export const updateInspectorSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  departmentId: z.coerce.number().int().positive().optional(),
+  email: z.string().trim().email().max(320).optional().nullable().or(z.literal('')),
+  jobTitle: z.string().trim().max(200).optional().nullable(),
+  hireDate: z
+    .union([z.literal(''), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'hireDate must be YYYY-MM-DD')])
+    .optional()
+    .nullable(),
+  baseLocation: z.string().trim().max(200).optional().nullable(),
+  weeklyCapacityHrs: z.coerce.number().finite().positive().max(168).optional(),
+  qeApproved: z.coerce.boolean().optional(),
+  status: z.enum(['Active', 'OnLeave', 'Training', 'Inactive']).optional(),
+});
+
+export const bulkImportInspectorsSchema = z.object({
+  inspectors: z
+    .array(
+      z.object({
+        employeeNo: z.string().trim().min(1).max(40),
+        name: z.string().trim().min(1).max(200),
+        departmentCode: z.string().trim().min(1).max(20),
+        email: z.string().trim().email().max(320).optional().nullable().or(z.literal('')),
+        jobTitle: z.string().trim().max(200).optional().nullable(),
+        status: z.enum(['Active', 'OnLeave', 'Training', 'Inactive']).optional(),
+        qeApproved: z.coerce.boolean().optional(),
+        baseLocation: z.string().trim().max(200).optional().nullable(),
+        hireDate: z
+          .union([z.literal(''), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)])
+          .optional()
+          .nullable(),
+      })
+    )
+    .min(1)
+    .max(500),
+});
+
+export const bulkImportJobTypesSchema = z.object({
+  departmentId: z.coerce.number().int().positive(),
+  jobTypes: z
+    .array(
+      z.object({
+        code: z.string().trim().min(1).max(40),
+        name: z.string().trim().min(1).max(200),
+        description: z.string().trim().max(2000).optional().nullable(),
+        dayRateUsd: optionalUsd,
+        defaultHours: optionalHours,
+        active: z.coerce.boolean().optional(),
+        /** Pipe-separated cert codes, e.g. NDT-UT-L2|IRATA-L1 */
+        requiredCertCodes: z.string().trim().max(500).optional().nullable(),
+      })
+    )
+    .min(1)
+    .max(200),
+});
+
 export const createClientSchema = z.object({
   name: z.string().trim().min(1).max(200),
   industry: z.string().trim().max(120).optional().nullable(),
@@ -211,8 +268,6 @@ export const updateClientSchema = z.object({
   contact: z.string().trim().max(200).optional().nullable(),
   email: z.string().trim().email().max(320).optional().nullable().or(z.literal('')),
 });
-
-const optionalHours = z.coerce.number().finite().nonnegative().max(24).optional().nullable();
 
 export const createJobTypeSchema = z.object({
   departmentId: z.coerce.number().int().positive(),

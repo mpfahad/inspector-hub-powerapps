@@ -5,6 +5,7 @@ import { formatMoney } from '../lib/money';
 import { useAuth } from '../context/AuthContext';
 import { useOptionalDepartment } from '../context/DepartmentContext';
 import { openAssignments } from '../lib/jobs';
+import { parseDelimitedRows, rowsSkipHeader } from '../lib/csv';
 
 function certBadgeClass(status: string) {
   if (status === 'Valid') return 'bg-teal/10 text-teal';
@@ -84,6 +85,9 @@ export function InspectorsPage() {
   const [qeFilter, setQeFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [form, setForm] = useState(emptyEmployeeForm);
   const [showForm, setShowForm] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkResult, setBulkResult] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -279,6 +283,46 @@ export function InspectorsPage() {
     }
   };
 
+  const runBulkImport = async () => {
+    setError('');
+    setBulkResult('');
+    const rows = rowsSkipHeader(parseDelimitedRows(bulkText), [
+      'employee',
+      'name',
+      'department',
+    ]);
+    if (rows.length === 0) {
+      setError('Paste CSV rows: employeeNo, name, departmentCode, email, jobTitle, status, qeApproved');
+      return;
+    }
+    const inspectors = rows.map((r) => ({
+      employeeNo: r[0] ?? '',
+      name: r[1] ?? '',
+      departmentCode: r[2] ?? '',
+      email: r[3] || null,
+      jobTitle: r[4] || null,
+      status: (r[5] as 'Active') || 'Active',
+      qeApproved: /^(yes|y|true|1)$/i.test(r[6] ?? ''),
+      baseLocation: r[7] || null,
+      hireDate: r[8] || null,
+    }));
+    setSaving(true);
+    try {
+      const res = await api.bulkImportInspectors({ inspectors });
+      setBulkResult(
+        `Created ${res.created.length}, updated ${res.updated.length}, errors ${res.errors.length}` +
+          (res.errors.length
+            ? `\n${res.errors.map((e) => `${e.employeeNo}: ${e.error}`).join('\n')}`
+            : '')
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bulk import failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
@@ -290,14 +334,64 @@ export function InspectorsPage() {
               : `${filtered.length} of ${items.length} employees match filters.`}
           </p>
         </div>
-        <button
-          type="button"
-          className="btn-primary shrink-0"
-          onClick={() => (showForm ? resetForm() : setShowForm(true))}
-        >
-          {showForm ? 'Cancel' : '+ New employee'}
-        </button>
+        <div className="flex flex-wrap gap-2 shrink-0">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => {
+              setShowBulk((v) => !v);
+              setShowForm(false);
+              setBulkResult('');
+            }}
+          >
+            {showBulk ? 'Cancel bulk' : 'Bulk upload'}
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => {
+              if (showForm) resetForm();
+              else {
+                setShowForm(true);
+                setShowBulk(false);
+              }
+            }}
+          >
+            {showForm ? 'Cancel' : '+ New employee'}
+          </button>
+        </div>
       </div>
+
+      {showBulk && (
+        <div className="card p-4 space-y-3 border-teal/30">
+          <h2 className="text-sm font-semibold text-navy">Bulk upload employees</h2>
+          <p className="text-xs text-slate-500">
+            CSV columns:{' '}
+            <span className="font-mono">
+              employeeNo, name, departmentCode, email, jobTitle, status, qeApproved, baseLocation, hireDate
+            </span>
+            . Department must already exist (e.g. <span className="font-mono">ROPE</span>,{' '}
+            <span className="font-mono">NDT</span>). Upserts by employee number.
+          </p>
+          <textarea
+            className="input font-mono text-xs min-h-[140px]"
+            placeholder={
+              'employeeNo,name,departmentCode,email,jobTitle,status,qeApproved\nE9001,Jane Rope,ROPE,jane@applus.com,Rope Tech,Active,No'
+            }
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <button type="button" className="btn-primary text-sm" disabled={saving} onClick={runBulkImport}>
+              {saving ? 'Importing…' : 'Import employees'}
+            </button>
+            <button type="button" className="btn-secondary text-sm" onClick={() => setShowBulk(false)}>
+              Close
+            </button>
+          </div>
+          {bulkResult && <pre className="text-xs text-slate-600 whitespace-pre-wrap">{bulkResult}</pre>}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <button

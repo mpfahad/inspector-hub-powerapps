@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   api,
   type Certification,
@@ -93,10 +93,13 @@ function CertRow({
 
 export function InspectorDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const deptCtx = useOptionalDepartment();
   const canManageCerts = ['Coordinator', 'Manager', 'Admin'].includes(user?.role ?? '');
   const isAdminUser = user?.role === 'Admin';
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const [inspector, setInspector] = useState<InspectorDetail | null>(null);
   const [catalog, setCatalog] = useState<Certification[]>([]);
@@ -229,14 +232,39 @@ export function InspectorDetailPage() {
               {inspector.highestQualification ? ` · ${inspector.highestQualification}` : ''}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
             {inspector.qeApproved && <span className="badge bg-teal/10 text-teal">QE approved</span>}
             <span className="badge bg-slate-100">{inspector.status}</span>
+            {canManageCerts && (
+              <select
+                className="input text-xs py-1 w-auto"
+                value={inspector.status}
+                disabled={deleteBusy}
+                onChange={async (e) => {
+                  setDeleteError('');
+                  setDeleteBusy(true);
+                  try {
+                    await api.updateInspector(inspector.id, { status: e.target.value });
+                    await load();
+                  } catch (err) {
+                    setDeleteError(err instanceof Error ? err.message : 'Could not update status');
+                  } finally {
+                    setDeleteBusy(false);
+                  }
+                }}
+              >
+                {['Active', 'OnLeave', 'Training', 'Inactive'].map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
         {canManageCerts && (
-          <div className="mt-6 rounded-lg border border-slate-200 p-4">
+          <div className="mt-6 rounded-lg border border-slate-200 p-4 space-y-3">
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -265,6 +293,60 @@ export function InspectorDetailPage() {
               </span>
             </label>
             {qeError && <p className="text-sm text-red-600 mt-2">{qeError}</p>}
+            <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-100">
+              <button
+                type="button"
+                className="btn-secondary text-xs text-amber-800 border-amber-200"
+                disabled={deleteBusy || inspector.status === 'Inactive'}
+                onClick={async () => {
+                  if (!window.confirm(`Mark ${inspector.name} as Inactive? They leave the assignable pool.`)) return;
+                  setDeleteError('');
+                  setDeleteBusy(true);
+                  try {
+                    await api.deleteInspector(inspector.id, { soft: true });
+                    await load();
+                  } catch (err) {
+                    setDeleteError(err instanceof Error ? err.message : 'Could not mark inactive');
+                  } finally {
+                    setDeleteBusy(false);
+                  }
+                }}
+              >
+                Mark inactive
+              </button>
+              <button
+                type="button"
+                className="btn-secondary text-xs text-red-700 border-red-200"
+                disabled={deleteBusy}
+                onClick={async () => {
+                  if (
+                    !window.confirm(
+                      `Delete ${inspector.name}?\n\nIf they have job history they will be marked Inactive instead of removed.`
+                    )
+                  ) {
+                    return;
+                  }
+                  setDeleteError('');
+                  setDeleteBusy(true);
+                  try {
+                    const res = await api.deleteInspector(inspector.id);
+                    if (res.softDeleted) {
+                      await load();
+                      setDeleteError(res.message ?? 'Marked Inactive (history kept).');
+                    } else {
+                      navigate(deptCtx?.deptPath('inspectors') ?? '/inspectors');
+                    }
+                  } catch (err) {
+                    setDeleteError(err instanceof Error ? err.message : 'Could not delete');
+                  } finally {
+                    setDeleteBusy(false);
+                  }
+                }}
+              >
+                Delete inspector
+              </button>
+            </div>
+            {deleteError && <p className="text-sm text-red-600">{deleteError}</p>}
           </div>
         )}
 

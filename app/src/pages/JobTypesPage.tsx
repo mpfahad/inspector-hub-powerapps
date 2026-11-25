@@ -3,6 +3,7 @@ import { api, type Certification, type JobType } from '../lib/api';
 import { CURRENCY_CODE, formatMoney } from '../lib/money';
 import { useAuth } from '../context/AuthContext';
 import { useDepartment } from '../context/DepartmentContext';
+import { parseDelimitedRows, rowsSkipHeader } from '../lib/csv';
 
 type JobTypeForm = {
   code: string;
@@ -215,6 +216,10 @@ export function JobTypesPage() {
   const [createError, setCreateError] = useState('');
   const [creating, setCreating] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkResult, setBulkResult] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<JobTypeForm>(emptyForm);
@@ -301,6 +306,39 @@ export function JobTypesPage() {
       setCreateError(err instanceof Error ? err.message : 'Could not create job type');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const runBulkImport = async () => {
+    if (!department) return;
+    setListError('');
+    setBulkResult('');
+    const rows = rowsSkipHeader(parseDelimitedRows(bulkText), ['code', 'name', 'job']);
+    if (rows.length === 0) {
+      setListError('Paste CSV: code, name, description, dayRate, defaultHours, active, requiredCertCodes');
+      return;
+    }
+    const jobTypes = rows.map((r) => ({
+      code: r[0] ?? '',
+      name: r[1] ?? '',
+      description: r[2] || null,
+      dayRateUsd: r[3] ? Number(r[3]) : null,
+      defaultHours: r[4] ? Number(r[4]) : 8,
+      active: !/^(no|n|false|0)$/i.test(r[5] ?? 'Yes'),
+      requiredCertCodes: r[6] || null,
+    }));
+    setBulkBusy(true);
+    try {
+      const res = await api.bulkImportJobTypes({ departmentId: department.id, jobTypes });
+      setBulkResult(
+        `Created ${res.created.length}, updated ${res.updated.length}, errors ${res.errors.length}` +
+          (res.errors.length ? `\n${res.errors.map((e) => `${e.code}: ${e.error}`).join('\n')}` : '')
+      );
+      await load();
+    } catch (err) {
+      setListError(err instanceof Error ? err.message : 'Bulk import failed');
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -448,21 +486,71 @@ export function JobTypesPage() {
           </p>
         </div>
         {canManage && (
-          <button
-            type="button"
-            className="btn-primary shrink-0"
-            onClick={() => {
-              cancelEdit();
-              setShowCreate((v) => !v);
-              setCreateError('');
-            }}
-          >
-            {showCreate ? 'Cancel' : '+ New job type'}
-          </button>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                cancelEdit();
+                setShowCreate(false);
+                setShowBulk((v) => !v);
+                setBulkResult('');
+              }}
+            >
+              {showBulk ? 'Cancel bulk' : 'Bulk upload'}
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => {
+                cancelEdit();
+                setShowBulk(false);
+                setShowCreate((v) => !v);
+                setCreateError('');
+              }}
+            >
+              {showCreate ? 'Cancel' : '+ New job type'}
+            </button>
+          </div>
         )}
       </div>
 
       <div className="space-y-4 max-w-4xl">
+          {canManage && showBulk && (
+            <div className="card p-5 space-y-3 border-teal/30">
+              <h2 className="text-sm font-semibold text-navy">Bulk upload job types · {department.name}</h2>
+              <p className="text-xs text-slate-500">
+                CSV:{' '}
+                <span className="font-mono">
+                  code, name, description, dayRate, defaultHours, active, requiredCertCodes
+                </span>
+                . Cert codes pipe-separated (e.g. <span className="font-mono">IRATA-L1|IRATA-L2</span>).
+              </p>
+              <textarea
+                className="input font-mono text-xs min-h-[140px]"
+                placeholder={
+                  'code,name,description,dayRate,defaultHours,active,requiredCertCodes\nRA-TECH,Rope Access Tech,IRATA support,2200,8,Yes,IRATA-L1'
+                }
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn-primary text-sm"
+                  disabled={bulkBusy}
+                  onClick={runBulkImport}
+                >
+                  {bulkBusy ? 'Importing…' : 'Import job types'}
+                </button>
+                <button type="button" className="btn-secondary text-sm" onClick={() => setShowBulk(false)}>
+                  Close
+                </button>
+              </div>
+              {bulkResult && <pre className="text-xs text-slate-600 whitespace-pre-wrap">{bulkResult}</pre>}
+            </div>
+          )}
+
           {canManage && showCreate && (
             <div className="card p-5 space-y-3 border-teal/30">
               <h2 className="text-sm font-semibold text-navy">Add job type</h2>

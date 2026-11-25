@@ -16,6 +16,8 @@ import {
   createClientSchema,
   updateClientSchema,
   createInspectorSchema,
+  updateInspectorSchema,
+  bulkImportInspectorsSchema,
   createCertificationSchema,
   updateCertificationSchema,
   inspectorCostsSchema,
@@ -355,6 +357,99 @@ function crudRouter(model: 'client' | 'inspector' | 'department' | 'certificatio
   }
 
   if (model === 'inspector') {
+    router.post(
+      '/bulk-import',
+      requireRole(...staffRoles),
+      validateBody(bulkImportInspectorsSchema),
+      async (req, res) => {
+        const body = req.body as {
+          inspectors: {
+            employeeNo: string;
+            name: string;
+            departmentCode: string;
+            email?: string | null;
+            jobTitle?: string | null;
+            status?: 'Active' | 'OnLeave' | 'Training' | 'Inactive';
+            qeApproved?: boolean;
+            baseLocation?: string | null;
+            hireDate?: string | null;
+          }[];
+        };
+        const depts = await prisma.department.findMany();
+        const byCode = new Map(depts.map((d) => [d.code.toUpperCase(), d]));
+        const created: string[] = [];
+        const updated: string[] = [];
+        const errors: { employeeNo: string; error: string }[] = [];
+
+        for (const row of body.inspectors) {
+          const emp = row.employeeNo.trim();
+          const dept = byCode.get(row.departmentCode.trim().toUpperCase());
+          if (!dept) {
+            errors.push({ employeeNo: emp, error: `Unknown department code: ${row.departmentCode}` });
+            continue;
+          }
+          try {
+            assertCanAccessDepartment(req.user!, dept.id);
+          } catch {
+            errors.push({ employeeNo: emp, error: `No access to department ${dept.code}` });
+            continue;
+          }
+
+          const email = row.email?.trim() ? row.email.trim().toLowerCase() : null;
+          const data = {
+            employeeNo: emp,
+            name: row.name.trim(),
+            departmentId: dept.id,
+            email,
+            jobTitle: row.jobTitle?.trim() || null,
+            status: row.status ?? ('Active' as const),
+            qeApproved: row.qeApproved ?? false,
+            baseLocation: row.baseLocation?.trim() || null,
+            hireDate: row.hireDate ? new Date(`${row.hireDate}T12:00:00`) : null,
+          };
+
+          const existing =
+            (await prisma.inspector.findUnique({ where: { employeeNo: emp } })) ??
+            (await prisma.inspector.findFirst({ where: { name: data.name } }));
+
+          try {
+            if (!existing) {
+              await prisma.inspector.create({ data });
+              created.push(emp);
+            } else {
+              await prisma.inspector.update({
+                where: { id: existing.id },
+                data: {
+                  ...data,
+                  employeeNo: emp,
+                },
+              });
+              updated.push(emp);
+            }
+          } catch (err) {
+            errors.push({
+              employeeNo: emp,
+              error: err instanceof Error ? err.message : 'Could not save',
+            });
+          }
+        }
+
+        await recordAudit({
+          userId: req.user!.id,
+          action: 'Inspector.BulkImport',
+          entityType: 'Inspector',
+          payload: {
+            total: body.inspectors.length,
+            created: created.length,
+            updated: updated.length,
+            errors: errors.length,
+          },
+        });
+
+        res.json({ created, updated, errors });
+      }
+    );
+
     router.post('/', requireRole(...staffRoles), validateBody(createInspectorSchema), async (req, res) => {
       const body = req.body as {
         employeeNo: string;
@@ -430,6 +525,165 @@ function crudRouter(model: 'client' | 'inspector' | 'department' | 'certificatio
       });
 
       res.status(201).json(created);
+    });
+
+    router.put('/:id', requireRole(...staffRoles), validateBody(updateInspectorSchema), async (req, res) => {
+      const id = Number(req.params.id);
+      const body = req.body as {
+        name?: string;
+        departmentId?: number;
+        email?: string | null;
+        jobTitle?: string | null;
+        hireDate?: string | null;
+        baseLocation?: string | null;
+        weeklyCapacityHrs?: number;
+        qeApproved?: boolean;
+        status?: 'Active' | 'OnLeave' | 'Training' | 'Inactive';
+      };
+      const existing = await prisma.inspector.findUnique({ where: { id } });
+      if (!existing) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+      try {
+        assertCanAccessDepartment(req.user!, existing.departmentId);
+        if (body.departmentId !== undefined) {
+          assertCanAccessDepartment(req.user!, body.departmentId);
+        }
+      } catch (err) {
+        sendRouteError(res, err, 'Forbidden');
+        return;
+      }
+
+      if (body.departmentId !== undefined) {
+        const dept = await prisma.department.findUnique({ where: { id: body.departmentId } });
+        if (!dept) {
+          res.status(400).json({ error: 'Department not found' });
+          return;
+        }
+      }
+
+      const email =
+        body.email === undefined
+          ? undefined
+          : body.email?.trim()
+            ? body.email.trim().toLowerCase()
+            : null;
+
+      const updated = await prisma.inspector.update({
+        where: { id },
+        data: {
+          name: body.name,
+          departmentId: body.departmentId,
+          email,
+          jobTitle: body.jobTitle === undefined ? undefined : body.jobTitle || null,
+          hireDate:
+            body.hireDate === undefined
+              ? undefined
+              : body.hireDate
+                ? new Date(`${body.hireDate}T12:00:00`)
+                : null,
+          baseLocation: body.baseLocation === undefined ? undefined : body.baseLocation || null,
+          weeklyCapacityHrs: body.weeklyCapacityHrs,
+          qeApproved: body.qeApproved,
+          status: body.status,
+        },
+        include: { department: true },
+      });
+
+      await recordAudit({
+        userId: req.user!.id,
+        action: 'Inspector.Update',
+        entityType: 'Inspector',
+        entityId: id,
+        payload: { fields: Object.keys(body) },
+      });
+
+      res.json(withoutCostFields(updated as unknown as Record<string, unknown>, isAdmin(req.user!.role)));
+    });
+
+    router.delete('/:id', requireRole(...staffRoles), async (req, res) => {
+      const id = Number(req.params.id);
+      const soft = String(req.query.soft ?? '') === '1' || String(req.query.soft ?? '') === 'true';
+      const existing = await prisma.inspector.findUnique({
+        where: { id },
+        include: {
+          _count: {
+            select: {
+              assignments: true,
+              activityLogs: true,
+              timesheets: true,
+              leaveRequests: true,
+              proposals: true,
+            },
+          },
+          assignments: {
+            where: { status: { in: ['PendingAcceptance', 'Accepted', 'Active', 'Proposed'] } },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      });
+      if (!existing) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+      try {
+        assertCanAccessDepartment(req.user!, existing.departmentId);
+      } catch (err) {
+        sendRouteError(res, err, 'Forbidden');
+        return;
+      }
+
+      if (existing.assignments.length > 0) {
+        res.status(400).json({
+          error:
+            'Cannot delete while this inspector has open assignments. Remove them from active jobs first, or mark Inactive.',
+        });
+        return;
+      }
+
+      const hasHistory =
+        existing._count.assignments > 0 ||
+        existing._count.activityLogs > 0 ||
+        existing._count.timesheets > 0 ||
+        existing._count.leaveRequests > 0 ||
+        existing._count.proposals > 0;
+
+      if (soft || hasHistory) {
+        const updated = await prisma.inspector.update({
+          where: { id },
+          data: { status: 'Inactive' },
+        });
+        await recordAudit({
+          userId: req.user!.id,
+          action: 'Inspector.SoftDelete',
+          entityType: 'Inspector',
+          entityId: id,
+          payload: { employeeNo: existing.employeeNo, reason: soft ? 'requested' : 'has_history' },
+        });
+        res.json({
+          ok: true,
+          softDeleted: true,
+          id: updated.id,
+          message: hasHistory
+            ? 'Inspector marked Inactive (job/history records remain).'
+            : 'Inspector marked Inactive.',
+        });
+        return;
+      }
+
+      await prisma.inspectorCert.deleteMany({ where: { inspectorId: id } });
+      await prisma.inspectorCostHistory.deleteMany({ where: { inspectorId: id } });
+      await prisma.inspector.delete({ where: { id } });
+      await recordAudit({
+        userId: req.user!.id,
+        action: 'Inspector.Delete',
+        entityType: 'Inspector',
+        entityId: id,
+        payload: { employeeNo: existing.employeeNo, name: existing.name },
+      });
+      res.json({ ok: true, softDeleted: false, id });
     });
 
     router.get('/:id', async (req, res) => {

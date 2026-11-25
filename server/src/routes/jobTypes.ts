@@ -2,7 +2,11 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { validateBody } from '../lib/validate.js';
-import { createJobTypeSchema, updateJobTypeSchema } from '../lib/schemas.js';
+import {
+  bulkImportJobTypesSchema,
+  createJobTypeSchema,
+  updateJobTypeSchema,
+} from '../lib/schemas.js';
 import { recordAudit } from '../services/audit.js';
 import {
   assertCanAccessDepartment,
@@ -57,6 +61,123 @@ router.get('/all', requireRole('Coordinator', 'Manager', 'Admin'), async (req, r
   });
   res.json(types);
 });
+
+router.post(
+  '/bulk-import',
+  requireRole(...STAFF_ROLES),
+  validateBody(bulkImportJobTypesSchema),
+  async (req, res) => {
+    const body = req.body as {
+      departmentId: number;
+      jobTypes: {
+        code: string;
+        name: string;
+        description?: string | null;
+        dayRateUsd?: number | null;
+        defaultHours?: number | null;
+        active?: boolean;
+        requiredCertCodes?: string | null;
+      }[];
+    };
+
+    const dept = await prisma.department.findUnique({ where: { id: body.departmentId } });
+    if (!dept) {
+      res.status(400).json({ error: 'Department not found' });
+      return;
+    }
+    try {
+      assertCanAccessDepartment(req.user!, body.departmentId);
+    } catch (err) {
+      sendRouteError(res, err, 'Forbidden');
+      return;
+    }
+
+    const created: string[] = [];
+    const updated: string[] = [];
+    const errors: { code: string; error: string }[] = [];
+
+    for (const row of body.jobTypes) {
+      const code = row.code.trim().toUpperCase();
+      try {
+        const rates = syncJobTypeRates({
+          dayRateUsd: row.dayRateUsd,
+          defaultHours: row.defaultHours ?? 8,
+        });
+        const certCodes = (row.requiredCertCodes ?? '')
+          .split(/[|;,]/)
+          .map((c) => c.trim().toUpperCase())
+          .filter(Boolean);
+        const certIds: number[] = [];
+        for (const certCode of certCodes) {
+          const cert = await prisma.certification.upsert({
+            where: { code: certCode },
+            create: { code: certCode, name: certCode, validityMonths: 60 },
+            update: {},
+          });
+          certIds.push(cert.id);
+        }
+
+        const existing = await prisma.jobType.findFirst({
+          where: { departmentId: body.departmentId, code },
+        });
+
+        if (!existing) {
+          const type = await prisma.jobType.create({
+            data: {
+              departmentId: body.departmentId,
+              code,
+              name: row.name.trim(),
+              description: row.description?.trim() || null,
+              active: row.active ?? true,
+              defaultPriceUsd: rates.defaultPriceUsd,
+              dayRateUsd: rates.dayRateUsd,
+              hourRateUsd: rates.hourRateUsd,
+              defaultHours: rates.defaultHours,
+              certRequirements: certIds.length
+                ? { create: certIds.map((certificationId) => ({ certificationId, mandatory: true })) }
+                : undefined,
+            },
+          });
+          created.push(type.code);
+        } else {
+          await prisma.jobTypeCertRequirement.deleteMany({ where: { jobTypeId: existing.id } });
+          await prisma.jobType.update({
+            where: { id: existing.id },
+            data: {
+              name: row.name.trim(),
+              description: row.description?.trim() || null,
+              active: row.active ?? true,
+              defaultPriceUsd: rates.defaultPriceUsd,
+              dayRateUsd: rates.dayRateUsd,
+              hourRateUsd: rates.hourRateUsd,
+              defaultHours: rates.defaultHours,
+              certRequirements: certIds.length
+                ? { create: certIds.map((certificationId) => ({ certificationId, mandatory: true })) }
+                : undefined,
+            },
+          });
+          updated.push(code);
+        }
+      } catch (err) {
+        errors.push({ code, error: err instanceof Error ? err.message : 'Could not save' });
+      }
+    }
+
+    await recordAudit({
+      userId: req.user?.id,
+      action: 'jobType.bulk_import',
+      entityType: 'JobType',
+      payload: {
+        departmentId: body.departmentId,
+        created: created.length,
+        updated: updated.length,
+        errors: errors.length,
+      },
+    });
+
+    res.json({ created, updated, errors });
+  }
+);
 
 router.get('/:id', async (req, res) => {
   const type = await prisma.jobType.findUnique({

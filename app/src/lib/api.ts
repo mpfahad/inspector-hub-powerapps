@@ -175,6 +175,22 @@ export const api = {
     request<JobType>(`/api/job-types/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteJobType: (id: number) =>
     request<{ ok: boolean; id: number }>(`/api/job-types/${id}`, { method: 'DELETE' }),
+  bulkImportJobTypes: (data: {
+    departmentId: number;
+    jobTypes: {
+      code: string;
+      name: string;
+      description?: string | null;
+      dayRateUsd?: number | null;
+      defaultHours?: number | null;
+      active?: boolean;
+      requiredCertCodes?: string | null;
+    }[];
+  }) =>
+    request<{ created: string[]; updated: string[]; errors: { code: string; error: string }[] }>(
+      '/api/job-types/bulk-import',
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
   myAssignments: () =>
     request<{ pending: Assignment[]; pendingQe: Assignment[]; active: Assignment[]; completed: Assignment[] }>(
       '/api/assignments/mine'
@@ -319,6 +335,44 @@ export const api = {
     qeApproved?: boolean;
     status?: string;
   }) => request<Inspector>('/api/inspectors', { method: 'POST', body: JSON.stringify(data) }),
+  updateInspector: (
+    id: number,
+    data: {
+      name?: string;
+      departmentId?: number;
+      email?: string | null;
+      jobTitle?: string | null;
+      hireDate?: string | null;
+      baseLocation?: string | null;
+      weeklyCapacityHrs?: number;
+      qeApproved?: boolean;
+      status?: string;
+    }
+  ) => request<Inspector>(`/api/inspectors/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteInspector: (id: number, opts?: { soft?: boolean }) => {
+    const q = opts?.soft ? '?soft=1' : '';
+    return request<{ ok: boolean; softDeleted: boolean; id: number; message?: string }>(
+      `/api/inspectors/${id}${q}`,
+      { method: 'DELETE' }
+    );
+  },
+  bulkImportInspectors: (data: {
+    inspectors: {
+      employeeNo: string;
+      name: string;
+      departmentCode: string;
+      email?: string | null;
+      jobTitle?: string | null;
+      status?: string;
+      qeApproved?: boolean;
+      baseLocation?: string | null;
+      hireDate?: string | null;
+    }[];
+  }) =>
+    request<{ created: string[]; updated: string[]; errors: { employeeNo: string; error: string }[] }>(
+      '/api/inspectors/bulk-import',
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
   inspector: (id: number) => request<InspectorDetail>(`/api/inspectors/${id}`),
   addInspectorCert: (
     inspectorId: number,

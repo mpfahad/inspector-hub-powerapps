@@ -9,6 +9,7 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 - **Date raised:** when the request was logged.
 - **Implemented change summary:** fill in when work is done; start the entry with the **implementation date** (e.g. `2026-09-15: …`).
 - Keep stakeholder docs and UAT checklists in sync when a change is implemented.
+- **Effort / cost:** log hours (and QAR) in the companion file [`CHANGE-MANAGER-EFFORT.md`](./CHANGE-MANAGER-EFFORT.md) — do not overload this table with timing columns.
 
 ### Status values
 
@@ -70,6 +71,7 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 | CM-041 | 2026-11-22 | **NDT Inspection** intake: import employees + certs + job types from `docs/NDT/*.csv` (TPI sheet → NDT dept). | Stakeholder | Implemented | 2026-11-22: `npm run db:import-ndt`; 10 employees, NDT job types + required certs; Level III also grants L2 codes. |
 | CM-042 | 2026-11-25 | **Delete/inactive inspector**; **bulk CSV upload** for inspectors + job types; Settings already adds departments (e.g. Rope Access). | Stakeholder | Implemented | 2026-11-25: `PUT/DELETE /api/inspectors/:id`; `POST .../bulk-import` for inspectors & job-types; Inspectors/Job types Bulk upload UI. |
 | CM-043 | 2026-11-26 | New **User Guide** folder with single current guide; remove outdated staff guide from `docs/`. | Stakeholder | Implemented | 2026-11-26: `docs/USER GUIDE/Inspection-Hub-User-Guide.md` (dept IA, rates, bulk, delete, Settings). |
+| CM-044 | 2026-11-26 | **Effort log:** second change-manager file with hours/minutes and cost @ 50 QAR/h; historical estimates + rule for actual time on future CMs. | Internal | Implemented | 2026-11-26: [`docs/CHANGE-MANAGER-EFFORT.md`](./CHANGE-MANAGER-EFFORT.md). |
 
 ---
 
@@ -82,4 +84,4 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 
 ---
 
-*Last updated: 2026-11-26 (CM-043 user guide)*
+*Last updated: 2026-11-26 (CM-044 effort log)*

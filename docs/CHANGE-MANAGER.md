@@ -69,6 +69,7 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 | CM-040 | 2026-11-22 | Jobs page: **map below board**, above timesheet generation (was side/top of board). | Stakeholder | Implemented | 2026-11-22: `JobsPage` vertical stack board → map → timesheet. |
 | CM-041 | 2026-11-22 | **NDT Inspection** intake: import employees + certs + job types from `docs/NDT/*.csv` (TPI sheet → NDT dept). | Stakeholder | Implemented | 2026-11-22: `npm run db:import-ndt`; 10 employees, NDT job types + required certs; Level III also grants L2 codes. |
 | CM-042 | 2026-11-25 | **Delete/inactive inspector**; **bulk CSV upload** for inspectors + job types; Settings already adds departments (e.g. Rope Access). | Stakeholder | Implemented | 2026-11-25: `PUT/DELETE /api/inspectors/:id`; `POST .../bulk-import` for inspectors & job-types; Inspectors/Job types Bulk upload UI. |
+| CM-043 | 2026-11-26 | New **User Guide** folder with single current guide; remove outdated staff guide from `docs/`. | Stakeholder | Implemented | 2026-11-26: `docs/USER GUIDE/Inspection-Hub-User-Guide.md` (dept IA, rates, bulk, delete, Settings). |
 
 ---
 
@@ -81,4 +82,4 @@ Living register of change requests for **Inspector Resource Planning & Productiv
 
 ---
 
-*Last updated: 2026-11-25 (CM-042 inspector delete + bulk uploads)*
+*Last updated: 2026-11-26 (CM-043 user guide)*

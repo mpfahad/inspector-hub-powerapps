@@ -1,6 +1,6 @@
 # IRPPMS — Technical Overview
 
-Short technical reference for developers and IT. For end-user navigation see `IRPPMS-Staff-User-Guide.md`.
+Short technical reference for developers and IT. For end-user navigation see [`USER GUIDE/Inspection-Hub-User-Guide.md`](./USER%20GUIDE/Inspection-Hub-User-Guide.md).
 
 ---
 
@@ -170,7 +170,7 @@ Product changes are logged in `docs/CHANGE-MANAGER.md` (CM-001 … CM-013). Keep
 
 | Doc | Audience |
 |-----|----------|
-| `IRPPMS-Staff-User-Guide.md` / `.docx` | Coordinators & managers |
+| `USER GUIDE/Inspection-Hub-User-Guide.md` | Coordinators, managers, admins (latest only) |
 | `IRPPMS-Stakeholder-Guide.md` | Broader UAT (may lag product) |
 | `AUTH.md` | Auth / Entra readiness |
 | `PORTS.md` | Ports & isolation |
